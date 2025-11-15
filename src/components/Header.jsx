@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
 import logoGia from '../../logo-gia.png'
+import CartIcon from './CartIcon'
 
 function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -44,20 +45,24 @@ function Header() {
                 {link.label}
               </Link>
             ))}
+            <CartIcon />
           </nav>
 
-          {/* Mobile Menu Button */}
-          <button
-            className="md:hidden p-2 rounded-md text-gray-300 hover:text-primary-yellow hover:bg-gray-800"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            aria-label="Toggle menu"
-          >
-            {isMenuOpen ? (
-              <XMarkIcon className="h-6 w-6" />
-            ) : (
-              <Bars3Icon className="h-6 w-6" />
-            )}
-          </button>
+          {/* Mobile Actions */}
+          <div className="md:hidden flex items-center space-x-2">
+            <CartIcon />
+            <button
+              className="p-2 rounded-md text-gray-300 hover:text-primary-yellow hover:bg-gray-800"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              aria-label="Toggle menu"
+            >
+              {isMenuOpen ? (
+                <XMarkIcon className="h-6 w-6" />
+              ) : (
+                <Bars3Icon className="h-6 w-6" />
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Mobile Navigation */}
@@ -78,6 +83,17 @@ function Header() {
                   {link.label}
                 </Link>
               ))}
+              <Link
+                to="/carrito"
+                onClick={() => setIsMenuOpen(false)}
+                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  isActive('/carrito')
+                    ? 'bg-primary-yellow text-primary-black'
+                    : 'text-gray-300 hover:text-primary-yellow hover:bg-gray-800'
+                }`}
+              >
+                Carrito
+              </Link>
             </div>
           </nav>
         )}

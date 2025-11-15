@@ -197,6 +197,35 @@ function Contacto() {
             </form>
           </div>
         </div>
+
+        {/* Mapa de ubicación */}
+        <div className="mt-12 max-w-6xl mx-auto">
+          <h2 className="text-2xl font-bold text-primary-black mb-6 text-center">
+            Nuestra Ubicación
+          </h2>
+          <div className="rounded-lg overflow-hidden shadow-lg bg-gray-200">
+            <iframe
+              src={`https://www.google.com/maps?q=-36.876725,-60.179608&hl=es&z=15&output=embed`}
+              width="100%"
+              height="450"
+              style={{ border: 0 }}
+              allowFullScreen=""
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+              title="Ubicación de GiA Electro"
+            ></iframe>
+            <div className="mt-4 text-center">
+              <a
+                href="https://maps.app.goo.gl/fUeZxUeq181Nx3hz6"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary-red hover:text-primary-yellow transition-colors font-medium"
+              >
+                Ver en Google Maps →
+              </a>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

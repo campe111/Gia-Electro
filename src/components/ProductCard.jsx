@@ -1,8 +1,25 @@
 import { Link } from 'react-router-dom'
-import { ShoppingCartIcon } from '@heroicons/react/24/outline'
+import { ShoppingCartIcon, EyeIcon } from '@heroicons/react/24/outline'
+import { useCart } from '../context/CartContext'
 
 function ProductCard({ product }) {
   const { id, name, price, image, category, description } = product
+  const { addToCart, isInCart } = useCart()
+  const inCart = isInCart(id)
+
+  const handleAddToCart = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    addToCart(product)
+    // Mostrar notificación visual
+    const button = e.target.closest('button')
+    if (button) {
+      button.classList.add('scale-105')
+      setTimeout(() => {
+        button.classList.remove('scale-105')
+      }, 200)
+    }
+  }
 
   return (
     <div className="card">
@@ -29,17 +46,32 @@ function ProductCard({ product }) {
             {description}
           </p>
         )}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <span className="text-2xl font-bold text-primary-red">
             ${price.toLocaleString()}
           </span>
-          <Link
-            to={`/catalogo/${id}`}
-            className="flex items-center space-x-1 bg-primary-yellow hover:bg-yellow-500 text-primary-black font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
-          >
-            <ShoppingCartIcon className="h-5 w-5" />
-            <span>Ver más</span>
-          </Link>
+          <div className="flex gap-2">
+            <Link
+              to={`/catalogo/${id}`}
+              className="flex items-center justify-center space-x-1 bg-gray-200 hover:bg-gray-300 text-primary-black font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
+            >
+              <EyeIcon className="h-5 w-5" />
+              <span className="hidden sm:inline">Ver</span>
+            </Link>
+            <button
+              onClick={handleAddToCart}
+              className={`flex items-center justify-center space-x-1 font-semibold py-2 px-4 rounded-lg transition-all duration-200 ${
+                inCart
+                  ? 'bg-green-500 hover:bg-green-600 text-white'
+                  : 'bg-primary-yellow hover:bg-yellow-500 text-primary-black'
+              }`}
+            >
+              <ShoppingCartIcon className="h-5 w-5" />
+              <span className="hidden sm:inline">
+                {inCart ? 'En carrito' : 'Agregar'}
+              </span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
