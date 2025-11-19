@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRightIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { products } from '../data/products'
+import logoGia from '../../logo-gia.png'
 
 function Hero() {
   const [currentIndex, setCurrentIndex] = useState(1) // Empezar en 1 para saltar la copia del último
@@ -72,11 +73,21 @@ function Hero() {
   }
 
   return (
-    <section className="relative flex items-center justify-center min-h-screen bg-gradient-to-r from-primary-black via-gray-900 to-primary-black text-white py-20 md:py-32">
+    <section className="relative flex items-center justify-center min-h-[100dvh] md:min-h-screen bg-gradient-to-b from-primary-black via-primary-red/20 to-primary-yellow/10 text-white py-8 md:py-12">
       <div className="container mx-auto px-4">
         <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="text-center mb-12">
+            {/* Logo */}
+            <div className="mb-6 flex justify-center">
+              <img 
+                src={logoGia} 
+                alt="GIA Electro Logo" 
+                className="h-48 md:h-64 lg:h-72 w-auto drop-shadow-2xl"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
             <h1 className="text-4xl md:text-6xl font-bold mb-6">
               Electrodomésticos de{' '}
               <span className="text-primary-yellow">Calidad</span>
@@ -139,6 +150,8 @@ function Hero() {
                               src={product.image}
                               alt={product.name}
                               className="w-full h-full object-cover"
+                              loading="lazy"
+                              decoding="async"
                               onError={(e) => {
                                 e.target.src =
                                   'https://via.placeholder.com/500x400?text=Imagen+No+Disponible'
@@ -220,9 +233,10 @@ function Hero() {
           )}
         </div>
       </div>
-      {/* Decorative elements */}
-      <div className="absolute top-0 right-0 w-64 h-64 bg-primary-red opacity-10 rounded-full blur-3xl"></div>
-      <div className="absolute bottom-0 left-0 w-64 h-64 bg-primary-yellow opacity-10 rounded-full blur-3xl"></div>
+      {/* Decorative elements - Bandera alemana */}
+      <div className="absolute top-0 right-0 w-64 h-64 bg-primary-red opacity-20 rounded-full blur-3xl"></div>
+      <div className="absolute bottom-0 left-0 w-64 h-64 bg-primary-yellow opacity-20 rounded-full blur-3xl"></div>
+      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-primary-black opacity-10 rounded-full blur-3xl"></div>
     </section>
   )
 }

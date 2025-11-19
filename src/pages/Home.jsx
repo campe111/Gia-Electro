@@ -1,5 +1,6 @@
 import Hero from '../components/Hero'
 import ProductCard from '../components/ProductCard'
+import RevealOnScroll from '../components/RevealOnScroll'
 import { Link } from 'react-router-dom'
 import { products } from '../data/products'
 
@@ -12,27 +13,30 @@ function Home() {
       <Hero />
 
       {/* Productos Destacados */}
-      <section className="py-16 bg-white">
-        <div className="container mx-auto px-4">
+      <section className="py-16 bg-gradient-to-b from-primary-black via-primary-red/30 to-primary-black text-white relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary-red/10 to-transparent"></div>
+        <div className="container mx-auto px-4 relative z-10">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-primary-black mb-4">
-              Productos <span className="text-primary-red">Destacados</span>
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              Productos <span className="text-primary-yellow">Destacados</span>
             </h2>
-            <p className="text-gray-600 max-w-2xl mx-auto">
+            <p className="text-gray-300 max-w-2xl mx-auto">
               Descubre nuestra selección de los mejores electrodomésticos
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            {featuredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8 mb-8">
+            {featuredProducts.map((product, idx) => (
+              <RevealOnScroll key={product.id} delayMs={idx * 100}>
+                <ProductCard product={product} />
+              </RevealOnScroll>
             ))}
           </div>
 
           <div className="text-center">
             <Link
               to="/catalogo"
-              className="btn-secondary inline-flex items-center space-x-2"
+              className="bg-primary-yellow hover:bg-yellow-500 text-primary-black font-semibold py-3 px-8 rounded-lg transition-colors duration-200 inline-flex items-center space-x-2"
             >
               <span>Ver Todo el Catálogo</span>
             </Link>

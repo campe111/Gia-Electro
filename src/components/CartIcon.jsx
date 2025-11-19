@@ -9,7 +9,7 @@ function CartIcon() {
   return (
     <Link
       to="/carrito"
-      className="relative p-2 rounded-md text-gray-300 hover:text-primary-yellow hover:bg-gray-800 transition-colors"
+      className="relative p-2 rounded-md text-white hover:text-primary-yellow bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/20 shadow-md transition-colors"
       aria-label="Carrito de compras"
     >
       <ShoppingCartIcon className="h-6 w-6" />

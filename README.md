@@ -4,10 +4,12 @@ Landing page modular para un local de electrodomésticos llamada "GiA Electro". 
 
 ## 🎨 Paleta de Colores
 
-- **Negro**: `#000000` (primary-black)
-- **Gris**: `#4A4A4A` (primary-gray)
-- **Amarillo**: `#FFD700` (primary-yellow)
-- **Rojo**: `#DC2626` (primary-red)
+La paleta de colores está inspirada en la bandera de Alemania:
+
+- **Negro**: `#000000` (primary-black) - Representa la fuerza y elegancia
+- **Rojo**: `#DD0000` (primary-red) - Representa la pasión y energía
+- **Amarillo**: `#FFCC00` (primary-yellow) - Representa la calidad y excelencia
+- **Gris**: `#4A4A4A` (primary-gray) - Color complementario
 
 ## 🚀 Instalación
 

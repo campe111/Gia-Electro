@@ -5,17 +5,29 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
+    container: {
+      center: true,
+      padding: {
+        DEFAULT: '1rem',
+        sm: '1rem',
+        md: '1.5rem',
+        lg: '2rem',
+      },
+    },
     extend: {
       colors: {
         primary: {
-          black: '#000000',
+          black: '#000000',      // Negro de la bandera alemana
           gray: '#4A4A4A',
-          yellow: '#FFD700',
-          red: '#DC2626',
+          yellow: '#FFCC00',     // Amarillo de la bandera alemana
+          red: '#DD0000',        // Rojo de la bandera alemana
         },
       },
     },
   },
-  plugins: [],
+  plugins: [
+    require('@tailwindcss/aspect-ratio'),
+    require('@tailwindcss/container-queries'),
+  ],
 }
 
