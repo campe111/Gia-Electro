@@ -79,36 +79,36 @@ function ProductCard({ product, enableContainer = false }) {
         {/* Botón de favoritos */}
         <button
           onClick={handleToggleFavorite}
-          className="absolute top-3 right-3 p-2 rounded-full bg-white/90 hover:bg-white shadow-md transition-all duration-200 hover:scale-110 z-10"
+          className="absolute top-2 sm:top-3 right-2 sm:right-3 p-1.5 sm:p-2 rounded-full bg-white/90 hover:bg-white shadow-md transition-all duration-200 hover:scale-110 z-10"
           aria-label={isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}
         >
           {isFavorite ? (
-            <HeartIconSolid className="h-5 w-5 text-red-500" />
+            <HeartIconSolid className="h-4 w-4 sm:h-5 sm:w-5 text-red-500" />
           ) : (
-            <HeartIcon className="h-5 w-5 text-gray-600 hover:text-red-500" />
+            <HeartIcon className="h-4 w-4 sm:h-5 sm:w-5 text-gray-600 hover:text-red-500" />
           )}
         </button>
 
         {/* Badges */}
         {category && (
-          <span className="absolute top-3 left-3 bg-primary-red text-white text-xs font-semibold px-2 py-1 rounded-md">
+          <span className="absolute top-2 sm:top-3 left-2 sm:left-3 bg-primary-red text-white text-[10px] sm:text-xs font-semibold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md">
             {category.charAt(0).toUpperCase() + category.slice(1)}
           </span>
         )}
         {previousPrice && (
-          <span className="absolute bottom-3 left-3 bg-primary-yellow text-primary-black text-xs font-extrabold px-2 py-1 rounded-md">
+          <span className="absolute bottom-2 sm:bottom-3 left-2 sm:left-3 bg-primary-yellow text-primary-black text-[10px] sm:text-xs font-extrabold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md">
             Oferta
           </span>
         )}
       </div>
 
       {/* Contenido */}
-      <div className="p-5 flex flex-col flex-grow">
-        <h3 className="text-base font-bold text-gray-900 mb-2 line-clamp-2 min-h-[3rem]">
+      <div className="p-4 sm:p-5 flex flex-col flex-grow">
+        <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-2 line-clamp-2 min-h-[2.5rem] sm:min-h-[3rem]">
           {name}
         </h3>
         {description && (
-          <p className="text-sm text-gray-600 mb-4 line-clamp-2 flex-grow">
+          <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4 line-clamp-2 flex-grow">
             {description}
           </p>
         )}
@@ -121,7 +121,7 @@ function ProductCard({ product, enableContainer = false }) {
                   Antes ${previousPrice.toLocaleString()}
                 </span>
               )}
-              <span className="text-2xl font-bold text-primary-red">
+              <span className="text-xl sm:text-2xl font-bold text-primary-red">
                 ${price.toLocaleString()}
               </span>
             </div>
@@ -129,13 +129,13 @@ function ProductCard({ product, enableContainer = false }) {
             {/* Botón agregar al carrito */}
             <button
               onClick={handleAddToCart}
-              className={`flex items-center justify-center gap-2 font-semibold py-2.5 px-4 rounded-lg transition-all duration-200 w-full ${
+              className={`flex items-center justify-center gap-2 font-semibold py-2 sm:py-2.5 px-3 sm:px-4 rounded-lg transition-all duration-200 w-full text-sm sm:text-base ${
                 inCart
                   ? 'bg-green-500 hover:bg-green-600 text-white'
                   : 'bg-primary-yellow hover:bg-yellow-500 text-primary-black'
               }`}
             >
-              <ShoppingCartIcon className="h-5 w-5" />
+              <ShoppingCartIcon className="h-4 w-4 sm:h-5 sm:w-5" />
               <span>{inCart ? 'En carrito' : 'Agregar'}</span>
             </button>
           </div>

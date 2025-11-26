@@ -78,16 +78,16 @@ function Catalogo() {
     <div className="py-12 bg-gray-50 min-h-screen">
       <div className="container mx-auto px-4">
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl md:text-5xl font-bold text-primary-black mb-4">
+        <div className="text-center mb-6 sm:mb-8">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-primary-black mb-3 sm:mb-4">
             Nuestro <span className="text-primary-red">Catálogo</span>
           </h1>
-          <p className="text-gray-600 max-w-2xl mx-auto mb-8">
+          <p className="text-sm sm:text-base text-gray-600 max-w-2xl mx-auto mb-6 sm:mb-8 px-4">
             Explora nuestra amplia gama de electrodomésticos
           </p>
           
           {/* Category Slider */}
-          <div className="mb-12">
+          <div className="mb-8 sm:mb-12">
             <CategorySlider 
               currentCategory={selectedCategory} 
               onCategoryClick={handleCategorySliderClick}
@@ -96,19 +96,19 @@ function Catalogo() {
         </div>
 
         {/* Layout con sidebar */}
-        <div className="grid grid-cols-1 md:grid-cols-[280px,1fr] gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[280px,1fr] gap-6 lg:gap-8">
           {/* Sidebar */}
-          <aside className="md:sticky md:top-20 h-max space-y-6">
+          <aside className="lg:sticky lg:top-20 h-max space-y-4 sm:space-y-6 order-2 lg:order-1">
             {/* Búsqueda */}
             <div className="">
               <div className="relative">
                 <MagnifyingGlassIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Buscar por nombre, marca, categoría o descripción..."
+                  placeholder="Buscar productos..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-12 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow focus:border-transparent"
+                  className="w-full pl-10 sm:pl-12 pr-10 sm:pr-12 py-2.5 sm:py-3 text-sm sm:text-base rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow focus:border-transparent"
                 />
                 {searchTerm && (
                   <button
@@ -124,15 +124,15 @@ function Catalogo() {
 
             {/* Categorías */}
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3">
                 Categorías
               </h3>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2">
                 {categories.map((category) => (
                   <button
                     key={category}
                     onClick={() => handleCategoryChange(category)}
-                    className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+                    className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-semibold text-xs sm:text-sm transition-all ${
                       selectedCategory === category
                         ? 'bg-primary-yellow text-primary-black shadow-md'
                         : 'bg-white text-gray-700 hover:bg-gray-200 border border-gray-200'
@@ -148,15 +148,15 @@ function Catalogo() {
 
             {/* Marcas */}
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3">
                 Marcas
               </h3>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2">
                 {brands.map((brand) => (
                   <button
                     key={brand}
                     onClick={() => setSelectedBrand(brand)}
-                    className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+                    className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-semibold text-xs sm:text-sm transition-all ${
                       selectedBrand === brand
                         ? 'bg-primary-red text-white shadow-md'
                         : 'bg-white text-gray-700 hover:bg-gray-200 border border-gray-200'
@@ -199,17 +199,17 @@ function Catalogo() {
           </aside>
 
           {/* Contenido principal */}
-          <div>
+          <div className="order-1 lg:order-2">
             {/* Resultados */}
             <div className="mb-4">
-              <p className="text-gray-600">
+              <p className="text-sm sm:text-base text-gray-600">
                 {filteredProducts.length} producto(s) encontrado(s)
               </p>
             </div>
 
             {/* Grid de productos */}
             {filteredProducts.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8 items-stretch">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 md:gap-8 items-stretch">
                 {filteredProducts.map((product, idx) => (
                   <RevealOnScroll key={product.id} delayMs={(idx % 4) * 100}>
                     <ProductCard product={product} />

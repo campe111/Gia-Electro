@@ -139,7 +139,7 @@ function CategorySlider({ currentCategory = null, onCategoryClick }) {
       <div
         ref={scrollContainerRef}
         onScroll={checkScrollButtons}
-        className="flex gap-4 overflow-x-auto scroll-smooth py-4 px-2 md:px-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+        className="flex gap-3 sm:gap-4 overflow-x-auto scroll-smooth py-4 px-4 sm:px-2 md:px-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
         style={{
           scrollbarWidth: 'none',
           msOverflowStyle: 'none',
@@ -152,8 +152,8 @@ function CategorySlider({ currentCategory = null, onCategoryClick }) {
             <button
               key={category.id}
               onClick={() => handleCategoryClick(category.id)}
-              className={`flex-shrink-0 w-[280px] h-[200px] rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 transform hover:scale-105 relative group ${
-                isActive ? 'ring-4 ring-primary-yellow' : ''
+              className={`flex-shrink-0 w-[240px] sm:w-[260px] md:w-[280px] h-[160px] sm:h-[180px] md:h-[200px] rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 transform hover:scale-105 relative group ${
+                isActive ? 'ring-2 md:ring-4 ring-primary-yellow' : ''
               }`}
             >
               <div className="relative w-full h-full">
@@ -169,7 +169,7 @@ function CategorySlider({ currentCategory = null, onCategoryClick }) {
                   }`}
                 >
                   <h3
-                    className={`text-lg font-bold ${
+                    className={`text-sm sm:text-base md:text-lg font-bold ${
                       isActive ? 'text-primary-black' : 'text-white'
                     }`}
                   >
