@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAdmin } from '../context/AdminContext'
+import { supabase } from '../config/supabase'
 import {
   ArrowLeftIcon,
   MagnifyingGlassIcon,
@@ -41,76 +42,85 @@ function AdminDashboard() {
     filterOrders()
   }, [searchTerm, statusFilter, orders])
 
-  const loadOrders = () => {
-    const savedOrders = JSON.parse(localStorage.getItem('giaElectroOrders') || '[]')
-    // Agregar estado si no existe
-    const ordersWithStatus = savedOrders.map((order) => ({
-      ...order,
-      status: order.status || 'pending',
-      paymentStatus: order.paymentStatus || 'pending',
-      shippingStatus: order.shippingStatus || 'pending',
-      trackingNumber: order.trackingNumber || null,
-    }))
-    setOrders(ordersWithStatus)
+  const loadOrders = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+
+      // Mapear datos de Supabase al formato del componente
+      const formattedOrders = data.map(order => ({
+        id: order.id,
+        date: order.created_at,
+        customer: order.customer_data,
+        shipping: order.shipping_data,
+        items: order.items,
+        total: order.total,
+        status: order.status,
+        paymentStatus: order.payment_status,
+        shippingStatus: order.shipping_status,
+        trackingNumber: order.tracking_number,
+        payment: order.payment_data
+      }))
+
+      setOrders(formattedOrders)
+    } catch (error) {
+      console.error('Error cargando órdenes:', error)
+      alert('Error cargando órdenes: ' + error.message)
+    }
   }
 
-  const filterOrders = () => {
-    let filtered = orders
+  const updateOrderStatus = async (orderId, newStatus) => {
+    try {
+      const updates = {
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      }
 
-    // Filtrar por búsqueda
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (order) =>
-          order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          order.customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          order.customer.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          order.customer.lastName.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    }
-
-    // Filtrar por estado
-    if (statusFilter !== 'todos') {
-      filtered = filtered.filter((order) => order.status === statusFilter)
-    }
-
-    // Ordenar por fecha más reciente primero
-    filtered.sort((a, b) => new Date(b.date) - new Date(a.date))
-
-    setFilteredOrders(filtered)
-  }
-
-  const updateOrderStatus = (orderId, newStatus) => {
-    const updatedOrders = orders.map((order) => {
-      if (order.id === orderId) {
-        const updated = { ...order, status: newStatus }
-        
-        // Auto-actualizar estados relacionados
-        if (newStatus === 'paid') {
-          updated.paymentStatus = 'paid'
+      // Auto-actualizar estados relacionados
+      if (newStatus === 'paid') {
+        updates.payment_status = 'paid'
+      }
+      if (newStatus === 'shipped') {
+        updates.shipping_status = 'shipped'
+        // Solo generar tracking si no existe
+        const currentOrder = orders.find(o => o.id === orderId)
+        if (!currentOrder?.trackingNumber) {
+          updates.tracking_number = `TRK-${Date.now().toString(36).toUpperCase()}`
         }
-        if (newStatus === 'shipped') {
-          updated.shippingStatus = 'shipped'
-          if (!updated.trackingNumber) {
-            updated.trackingNumber = `TRK-${Date.now().toString(36).toUpperCase()}`
+      }
+
+      const { error } = await supabase
+        .from('orders')
+        .update(updates)
+        .eq('id', orderId)
+
+      if (error) throw error
+
+      // Actualizar estado local
+      const updatedOrders = orders.map((order) => {
+        if (order.id === orderId) {
+          return {
+            ...order,
+            status: newStatus,
+            paymentStatus: updates.payment_status || order.paymentStatus,
+            shippingStatus: updates.shipping_status || order.shippingStatus,
+            trackingNumber: updates.tracking_number || order.trackingNumber
           }
         }
-        
-        // Guardar cambios
-        const allOrders = JSON.parse(localStorage.getItem('giaElectroOrders') || '[]')
-        const orderIndex = allOrders.findIndex((o) => o.id === orderId)
-        if (orderIndex !== -1) {
-          allOrders[orderIndex] = updated
-          localStorage.setItem('giaElectroOrders', JSON.stringify(allOrders))
-        }
-        
-        return updated
-      }
-      return order
-    })
-    setOrders(updatedOrders)
-    
-    // Simular envío de email de notificación
-    sendNotificationEmail(orderId, newStatus)
+        return order
+      })
+      setOrders(updatedOrders)
+
+      // Simular envío de email de notificación
+      sendNotificationEmail(orderId, newStatus)
+    } catch (error) {
+      console.error('Error actualizando orden:', error)
+      alert('Error actualizando orden: ' + error.message)
+    }
   }
 
   const sendNotificationEmail = (orderId, status) => {
@@ -333,10 +343,9 @@ function AdminDashboard() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
-                            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
-                              ORDER_STATUSES[order.status]?.color ||
+                            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${ORDER_STATUSES[order.status]?.color ||
                               'bg-gray-100 text-gray-800'
-                            }`}
+                              }`}
                           >
                             <StatusIcon className="h-4 w-4" />
                             {ORDER_STATUSES[order.status]?.label || order.status}

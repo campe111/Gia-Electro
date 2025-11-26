@@ -20,5 +20,17 @@
   .card {
     @apply bg-white rounded-lg shadow-lg overflow-hidden transition-transform duration-200 hover:scale-105;
   }
+
+  /* Efecto hover moderno para Gia Electro */
+  .brand-title {
+    position: relative;
+    transition: all 0.3s ease;
+    display: inline-block;
+    color: white;
+  }
+
+  .brand-title:hover {
+    filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.5));
+  }
 }
 

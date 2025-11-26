@@ -14,8 +14,6 @@ import Confirmacion from './pages/Confirmacion'
 import ConfirmacionPago from './pages/ConfirmacionPago'
 import AdminLogin from './pages/AdminLogin'
 import AdminDashboard from './pages/AdminDashboard'
-import Login from './pages/Login'
-import Register from './pages/Register'
 import AuthCallback from './pages/AuthCallback'
 
 function App() {
@@ -58,8 +56,6 @@ function App() {
             />
 
             {/* Rutas de autenticación de usuarios */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
 
             {/* Rutas de administración */}

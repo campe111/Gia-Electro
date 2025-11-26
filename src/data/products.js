@@ -1,138 +1,223 @@
-// Datos de productos de ejemplo
-// Puedes agregar, modificar o eliminar productos aquí
+// Productos de Gia Electro con imágenes locales
 
 export const products = [
+  // Aire Acondicionado
   {
     id: 1,
-    name: 'Refrigerador Samsung 500L',
-    brand: 'Samsung',
+    name: 'Aire Acondicionado BGH Split Frio/Calor 5200W BSH5',
+    brand: 'BGH',
     price: 899.99,
-    category: 'refrigeradores',
-    description:
-      'Refrigerador de dos puertas con tecnología No Frost y eficiencia energética A++',
-    image:
-      'https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=500',
+    category: 'aires-acondicionados',
+    description: 'Split frío/calor 5200W, ideal para ambientes medianos',
+    image: '/images/products/Gia Electro/Aire Acondicionado BGH Split Frio_Calor 5200W BSH5_2.jpg',
   },
   {
     id: 2,
-    name: 'Lavadora LG 15kg',
-    brand: 'LG',
+    name: 'Aire Acondicionado Portátil Philco 3500W Frio/Calor',
+    brand: 'Philco',
     price: 649.99,
-    category: 'lavadoras',
-    description:
-      'Lavadora de carga frontal con tecnología TurboWash y 10 años de garantía en el motor',
-    image:
-      'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=500',
+    category: 'aires-acondicionados',
+    description: 'Aire acondicionado portátil 3500W con función frío/calor',
+    image: '/images/products/Gia Electro/Aire acondicionado Portátil Philco 3500W Frio_Calo_12.jpg',
   },
+
+  // Aspiradoras
   {
     id: 3,
-    name: 'Microondas Panasonic 30L',
-    brand: 'Panasonic',
-    price: 199.99,
-    category: 'microondas',
-    description:
-      'Horno microondas con función de convección y 10 niveles de potencia',
-    image:
-      'https://images.unsplash.com/photo-1600298881974-6be191ceeda1?w=500',
+    name: 'Aspiradora Robot CONGA 2499',
+    brand: 'CONGA',
+    price: 499.99,
+    category: 'aspiradoras',
+    description: 'Aspiradora robot inteligente con mapeo y control remoto',
+    image: '/images/products/Gia Electro/Aspiradora Robot CONGA 2499 -_1.jpg',
   },
   {
     id: 4,
-    name: 'Cocina Inducción Bosch',
-    brand: 'Bosch',
-    price: 1299.99,
-    category: 'cocinas',
-    description:
-      'Placa de inducción de 4 zonas con tecnología PowerBoost y temporizador',
-    image:
-      'https://images.unsplash.com/photo-1556912172-45b7abe8b7e8?w=500',
+    name: 'Aspiradora Robot Smartlife Barre Trapea Extra Slim',
+    brand: 'Smartlife',
+    price: 399.99,
+    category: 'aspiradoras',
+    description: 'Aspiradora robot extra delgada con función de barrer y trapear',
+    image: '/images/products/Gia Electro/Aspiradora Robot Smartlife Barre Trapea Extra Slim_10.jpg',
   },
+
+  // Cafeteras
   {
     id: 5,
-    name: 'Secadora Whirlpool 8kg',
-    brand: 'Whirlpool',
-    price: 549.99,
-    category: 'secadoras',
-    description:
-      'Secadora de ropa con sensor de humedad y múltiples programas de secado',
-    image:
-      'https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?w=500',
+    name: 'Cafetera Eléctrica Liliana AC930 Negro',
+    brand: 'Liliana',
+    price: 199.99,
+    category: 'cafeteras',
+    description: 'Cafetera eléctrica con capacidad para 12 tazas',
+    image: '/images/products/Gia Electro/Cafetera Eléctrica Liliana AC930 Negro_2.jpg',
   },
   {
     id: 6,
-    name: 'Lavavajillas Miele 14 cubiertos',
-    brand: 'Miele',
-    price: 799.99,
-    category: 'lavavajillas',
-    description:
-      'Lavavajillas integrable con tecnología EcoPower y clasificación energética A+++',
-    image:
-      'https://images.unsplash.com/photo-1556911220-bff31c812dba?w=500',
+    name: 'Cafetera Espresso 2 en 1 con 20 Bar SL-EC8501',
+    brand: 'Smartlife',
+    price: 349.99,
+    category: 'cafeteras',
+    description: 'Cafetera espresso 2 en 1 con presión de 20 bar, incluye espumador de leche',
+    image: '/images/products/Gia Electro/Cafetera Espresso 2 en 1 con 20 Bar SL-EC8501_1.jpg',
   },
+
+  // Calefactores
   {
     id: 7,
-    name: 'Horno Eléctrico Siemens',
-    brand: 'Siemens',
-    price: 899.99,
-    category: 'hornos',
-    description:
-      'Horno multifunción con pirolisis y 71 litros de capacidad',
-    image:
-      'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=500',
+    name: 'Calefactor Coppens 4000 Tb S Izquierda Peltre Acer',
+    brand: 'Coppens',
+    price: 299.99,
+    category: 'calefactores',
+    description: 'Calefactor a gas de 4000 calorías con encendido eléctrico',
+    image: '/images/products/Gia Electro/Calefactor Coppens 4000 Tb S Izquierda Peltre Acer_3.jpg',
   },
+
+  // Cocinas
   {
     id: 8,
-    name: 'Aspiradora Robot iRobot',
-    brand: 'iRobot',
-    price: 399.99,
-    category: 'aspiradoras',
-    description:
-      'Aspiradora robot con mapeo inteligente y control desde smartphone',
-    image:
-      'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=500',
-  },
-  {
-    id: 9,
-    name: 'Refrigerador LG 400L',
-    brand: 'LG',
-    price: 749.99,
-    category: 'refrigeradores',
-    description:
-      'Refrigerador inteligente con WiFi y control desde smartphone',
-    image:
-      'https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=500',
-  },
-  {
-    id: 10,
-    name: 'Lavadora Samsung 12kg',
-    brand: 'Samsung',
-    price: 699.99,
-    category: 'lavadoras',
-    description:
-      'Lavadora de carga frontal con tecnología EcoBubble y AddWash',
-    image:
-      'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=500',
-  },
-  {
-    id: 11,
-    name: 'Cocina a Gas Bosch',
-    brand: 'Bosch',
+    name: 'Cocina Longvie a gas de 56cm 12231B',
+    brand: 'Longvie',
     price: 899.99,
     category: 'cocinas',
-    description:
-      'Cocina a gas de 4 hornillas con encendido eléctrico',
-    image:
-      'https://images.unsplash.com/photo-1556912172-45b7abe8b7e8?w=500',
+    description: 'Cocina a gas de 56cm con horno y 4 hornallas',
+    image: '/images/products/Gia Electro/Cocina Longvie a gas de 56cm 12231B_2.webp',
+  },
+
+  // Refrigeradores
+  {
+    id: 9,
+    name: 'Heladera Drean HDR280F50B',
+    brand: 'Drean',
+    price: 749.99,
+    category: 'refrigeradores',
+    description: 'Heladera con freezer de 280 litros, eficiencia energética A+',
+    image: '/images/products/Gia Electro/Heladera Drean HDR280F50B_1.webp',
+  },
+
+  // Hornos
+  {
+    id: 10,
+    name: 'Horno eléctrico KF-H46CL 46 Lt. Negro',
+    brand: 'Koh-i-noor',
+    price: 449.99,
+    category: 'hornos',
+    description: 'Horno eléctrico de 46 litros con función de convección',
+    image: '/images/products/Gia Electro/Horno eléctrico KF-H46CL 46 Lt. Negro_1.jpg',
+  },
+
+  // Lavarropas
+  {
+    id: 11,
+    name: 'Lavarropas Carga Frontal 6 Kg Blanco Drean NEXT',
+    brand: 'Drean',
+    price: 599.99,
+    category: 'lavadoras',
+    description: 'Lavarropas carga frontal de 6 kg con múltiples programas',
+    image: '/images/products/Gia Electro/Lavarropas Carga Frontal 6 Kg Blanco Drean – NEXT _1.webp',
   },
   {
     id: 12,
-    name: 'Horno Eléctrico Whirlpool',
-    brand: 'Whirlpool',
+    name: 'Lavarropas Drean Next 8.14 8KG WBG wi-fi',
+    brand: 'Drean',
+    price: 799.99,
+    category: 'lavadoras',
+    description: 'Lavarropas inteligente de 8 kg con conexión WiFi y control desde app',
+    image: '/images/products/Gia Electro/Lavarropas Drean Next 8.14 8KG WBG wi-fi_1.webp',
+  },
+  {
+    id: 13,
+    name: 'Lavarropas Samsung WW70M0NHWU – 7 Kg',
+    brand: 'Samsung',
+    price: 699.99,
+    category: 'lavadoras',
+    description: 'Lavarropas carga frontal de 7 kg con tecnología EcoBubble',
+    image: '/images/products/Gia Electro/Lavarropas Samsung  WW70M0NHWU – 7 Kg_1.webp',
+  },
+  {
+    id: 14,
+    name: 'Lavarropas Semiautomático Columbia LSC7001 7 kg',
+    brand: 'Columbia',
+    price: 449.99,
+    category: 'lavadoras',
+    description: 'Lavarropas semiautomático de 7 kg, ideal para espacios reducidos',
+    image: '/images/products/Gia Electro/Lavarropas Semiautomatico Columbia LSC7001 7 kg Ca_1.jpg',
+  },
+
+  // Televisores
+  {
+    id: 15,
+    name: 'Smart TV 32" HD Noblex Android DV32X7080',
+    brand: 'Noblex',
+    price: 399.99,
+    category: 'televisores',
+    description: 'Smart TV 32 pulgadas HD con Android TV integrado',
+    image: '/images/products/Gia Electro/Smart TV 32" HD Noblex Android DV32X7080_2.jpg',
+  },
+  {
+    id: 16,
+    name: 'Smart TV 32" HD Samsung UN32T4300A',
+    brand: 'Samsung',
+    price: 449.99,
+    category: 'televisores',
+    description: 'Smart TV Samsung 32 pulgadas HD con Tizen OS',
+    image: '/images/products/Gia Electro/Smart TV 32" HD Samsung UN32T4300A_2.jpg',
+  },
+  {
+    id: 17,
+    name: 'Smart TV 43" FHD Samsung UN43T5300SGCZB',
+    brand: 'Samsung',
+    price: 699.99,
+    category: 'televisores',
+    description: 'Smart TV Samsung 43 pulgadas Full HD con HDR',
+    image: '/images/products/Gia Electro/Smart TV 43 FHD Samsung UN43T5300SGCZB_3.jpg',
+  },
+  {
+    id: 18,
+    name: 'Smart TV 43" FHD TITAN Philips 43PFD6910/77',
+    brand: 'Philips',
     price: 649.99,
-    category: 'hornos',
-    description:
-      'Horno eléctrico con función de convección y autolimpieza',
-    image:
-      'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=500',
+    category: 'televisores',
+    description: 'Smart TV Philips 43 pulgadas Full HD con Android TV',
+    image: '/images/products/Gia Electro/Smart TV 43\' FHD TITAN Philips 43PFD6910_77_2.jpg',
+  },
+  {
+    id: 19,
+    name: 'Smart TV 50" UHD 4K Philips Titan 50PUD7309/77',
+    brand: 'Philips',
+    price: 899.99,
+    category: 'televisores',
+    description: 'Smart TV Philips 50 pulgadas 4K UHD con HDR y Android TV',
+    image: '/images/products/Gia Electro/Smart TV 50\' UHD 4KPhilips Titan 50PUD7309_77_2.jpg',
+  },
+
+  // Ventiladores
+  {
+    id: 20,
+    name: 'Ventilador de pie 20" 90 W SHVP20M',
+    brand: 'Philco',
+    price: 79.99,
+    category: 'ventiladores',
+    description: 'Ventilador de pie de 20 pulgadas con 3 velocidades y oscilación',
+    image: '/images/products/Gia Electro/Ventilador de pie 20 90 W SHVP20M_1.jpg',
+  },
+  {
+    id: 21,
+    name: 'Ventilador de pie 20" 90 W VPM2016',
+    brand: 'Philco',
+    price: 89.99,
+    category: 'ventiladores',
+    description: 'Ventilador de pie de 20 pulgadas con control remoto y temporizador',
+    image: '/images/products/Gia Electro/Ventilador de pie 20 90 W VPM2016_1.jpg',
+  },
+
+  // Batidoras
+  {
+    id: 22,
+    name: 'Batidora Planetaria Daewoo KA2216G Roja 650W',
+    brand: 'Daewoo',
+    price: 149.99,
+    category: 'batidoras',
+    description: 'Batidora planetaria de 650W con bowl de acero inoxidable',
+    image: '/images/products/Gia Electro/Batidora Planetaria Daewoo KA2216G Roja 650W_3.jpg',
   },
 ]
-

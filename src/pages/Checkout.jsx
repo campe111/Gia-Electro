@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
+import { supabase } from '../config/supabase'
 import MercadoPagoCheckout from '../components/MercadoPagoCheckout'
 import {
   CreditCardIcon,
@@ -52,22 +53,22 @@ function Checkout() {
     // Luhn algorithm básico
     const cleaned = number.replace(/\s/g, '')
     if (cleaned.length < 13 || cleaned.length > 19) return false
-    
+
     let sum = 0
     let isEven = false
-    
+
     for (let i = cleaned.length - 1; i >= 0; i--) {
       let digit = parseInt(cleaned[i])
-      
+
       if (isEven) {
         digit *= 2
         if (digit > 9) digit -= 9
       }
-      
+
       sum += digit
       isEven = !isEven
     }
-    
+
     return sum % 10 === 0
   }
 
@@ -97,7 +98,7 @@ function Checkout() {
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target
     const sanitizedValue = type === 'checkbox' ? checked : sanitizeInput(value)
-    
+
     setFormData((prev) => ({
       ...prev,
       [name]: sanitizedValue,
@@ -137,7 +138,7 @@ function Checkout() {
 
   const validateStep1 = () => {
     const newErrors = {}
-    
+
     if (!formData.firstName.trim()) {
       newErrors.firstName = 'El nombre es requerido'
     }
@@ -154,14 +155,14 @@ function Checkout() {
     } else if (!validatePhone(formData.phone)) {
       newErrors.phone = 'Teléfono inválido'
     }
-    
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
   const validateStep2 = () => {
     const newErrors = {}
-    
+
     if (!formData.address.trim()) {
       newErrors.address = 'La dirección es requerida'
     }
@@ -179,14 +180,14 @@ function Checkout() {
     if (!formData.country.trim()) {
       newErrors.country = 'El país es requerido'
     }
-    
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
   const validateStep3 = () => {
     const newErrors = {}
-    
+
     if (formData.paymentMethod === 'credit') {
       if (!formData.cardNumber.trim()) {
         newErrors.cardNumber = 'El número de tarjeta es requerido'
@@ -207,11 +208,11 @@ function Checkout() {
         newErrors.cardCVC = 'CVC inválido'
       }
     }
-    
+
     if (!formData.acceptTerms) {
       newErrors.acceptTerms = 'Debes aceptar los términos y condiciones'
     }
-    
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -271,10 +272,41 @@ function Checkout() {
         status: paymentData.status === 'approved' ? 'paid' : 'pending',
       }
 
-      // Guardar en localStorage (en producción usar API/Base de datos)
-      const orders = JSON.parse(localStorage.getItem('giaElectroOrders') || '[]')
-      orders.push(order)
-      localStorage.setItem('giaElectroOrders', JSON.stringify(orders))
+      // Guardar orden en Supabase
+      const { error: supabaseError } = await supabase
+        .from('orders')
+        .insert([
+          {
+            id: orderId,
+            customer_data: {
+              firstName: formData.firstName,
+              lastName: formData.lastName,
+              email: formData.email,
+              phone: formData.phone,
+            },
+            shipping_data: {
+              address: formData.address,
+              city: formData.city,
+              state: formData.state,
+              zipCode: formData.zipCode,
+              country: formData.country,
+            },
+            items: cartItems,
+            total: getTotalPrice(),
+            status: paymentData.status === 'approved' ? 'paid' : 'pending',
+            payment_status: paymentData.status === 'approved' ? 'paid' : 'pending',
+            payment_data: {
+              payment_id: paymentData.payment_id,
+              status: paymentData.status,
+              preference_id: paymentData.preference_id,
+              processor: 'Mercado Pago',
+            },
+            // Si el usuario está autenticado, guardar su ID
+            user_id: (await supabase.auth.getUser()).data.user?.id || null
+          }
+        ])
+
+      if (supabaseError) throw supabaseError
 
       // Limpiar carrito
       clearCart()
@@ -344,11 +376,10 @@ function Checkout() {
                 <div key={step} className="flex items-center flex-1">
                   <div className="flex flex-col items-center">
                     <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${
-                        currentStep >= step
-                          ? 'bg-primary-red text-white'
-                          : 'bg-gray-300 text-gray-600'
-                      }`}
+                      className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${currentStep >= step
+                        ? 'bg-primary-red text-white'
+                        : 'bg-gray-300 text-gray-600'
+                        }`}
                     >
                       {currentStep > step ? (
                         <CheckCircleIcon className="h-6 w-6" />
@@ -362,9 +393,8 @@ function Checkout() {
                   </div>
                   {step < 3 && (
                     <div
-                      className={`flex-1 h-1 mx-2 ${
-                        currentStep > step ? 'bg-primary-red' : 'bg-gray-300'
-                      }`}
+                      className={`flex-1 h-1 mx-2 ${currentStep > step ? 'bg-primary-red' : 'bg-gray-300'
+                        }`}
                     />
                   )}
                 </div>
@@ -396,11 +426,10 @@ function Checkout() {
                           name="firstName"
                           value={formData.firstName}
                           onChange={handleInputChange}
-                          className={`w-full px-4 py-3 rounded-lg border ${
-                            errors.firstName
-                              ? 'border-red-500'
-                              : 'border-gray-300'
-                          } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                          className={`w-full px-4 py-3 rounded-lg border ${errors.firstName
+                            ? 'border-red-500'
+                            : 'border-gray-300'
+                            } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
                           required
                         />
                         {errors.firstName && (
@@ -422,11 +451,10 @@ function Checkout() {
                           name="lastName"
                           value={formData.lastName}
                           onChange={handleInputChange}
-                          className={`w-full px-4 py-3 rounded-lg border ${
-                            errors.lastName
-                              ? 'border-red-500'
-                              : 'border-gray-300'
-                          } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                          className={`w-full px-4 py-3 rounded-lg border ${errors.lastName
+                            ? 'border-red-500'
+                            : 'border-gray-300'
+                            } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
                           required
                         />
                         {errors.lastName && (
@@ -448,9 +476,8 @@ function Checkout() {
                           name="email"
                           value={formData.email}
                           onChange={handleInputChange}
-                          className={`w-full px-4 py-3 rounded-lg border ${
-                            errors.email ? 'border-red-500' : 'border-gray-300'
-                          } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                          className={`w-full px-4 py-3 rounded-lg border ${errors.email ? 'border-red-500' : 'border-gray-300'
+                            } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
                           required
                         />
                         {errors.email && (
@@ -472,9 +499,8 @@ function Checkout() {
                           name="phone"
                           value={formData.phone}
                           onChange={handleInputChange}
-                          className={`w-full px-4 py-3 rounded-lg border ${
-                            errors.phone ? 'border-red-500' : 'border-gray-300'
-                          } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                          className={`w-full px-4 py-3 rounded-lg border ${errors.phone ? 'border-red-500' : 'border-gray-300'
+                            } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
                           required
                         />
                         {errors.phone && (
@@ -507,11 +533,10 @@ function Checkout() {
                           name="address"
                           value={formData.address}
                           onChange={handleInputChange}
-                          className={`w-full px-4 py-3 rounded-lg border ${
-                            errors.address
-                              ? 'border-red-500'
-                              : 'border-gray-300'
-                          } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                          className={`w-full px-4 py-3 rounded-lg border ${errors.address
+                            ? 'border-red-500'
+                            : 'border-gray-300'
+                            } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
                           required
                         />
                         {errors.address && (
@@ -534,11 +559,10 @@ function Checkout() {
                             name="city"
                             value={formData.city}
                             onChange={handleInputChange}
-                            className={`w-full px-4 py-3 rounded-lg border ${
-                              errors.city
-                                ? 'border-red-500'
-                                : 'border-gray-300'
-                            } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                            className={`w-full px-4 py-3 rounded-lg border ${errors.city
+                              ? 'border-red-500'
+                              : 'border-gray-300'
+                              } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
                             required
                           />
                           {errors.city && (
@@ -560,11 +584,10 @@ function Checkout() {
                             name="state"
                             value={formData.state}
                             onChange={handleInputChange}
-                            className={`w-full px-4 py-3 rounded-lg border ${
-                              errors.state
-                                ? 'border-red-500'
-                                : 'border-gray-300'
-                            } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                            className={`w-full px-4 py-3 rounded-lg border ${errors.state
+                              ? 'border-red-500'
+                              : 'border-gray-300'
+                              } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
                             required
                           />
                           {errors.state && (
@@ -586,11 +609,10 @@ function Checkout() {
                             name="zipCode"
                             value={formData.zipCode}
                             onChange={handleInputChange}
-                            className={`w-full px-4 py-3 rounded-lg border ${
-                              errors.zipCode
-                                ? 'border-red-500'
-                                : 'border-gray-300'
-                            } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                            className={`w-full px-4 py-3 rounded-lg border ${errors.zipCode
+                              ? 'border-red-500'
+                              : 'border-gray-300'
+                              } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
                             required
                           />
                           {errors.zipCode && (
@@ -612,11 +634,10 @@ function Checkout() {
                             name="country"
                             value={formData.country}
                             onChange={handleInputChange}
-                            className={`w-full px-4 py-3 rounded-lg border ${
-                              errors.country
-                                ? 'border-red-500'
-                                : 'border-gray-300'
-                            } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                            className={`w-full px-4 py-3 rounded-lg border ${errors.country
+                              ? 'border-red-500'
+                              : 'border-gray-300'
+                              } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
                             required
                           />
                           {errors.country && (
@@ -637,7 +658,7 @@ function Checkout() {
                       <LockClosedIcon className="h-6 w-6" />
                       Información de Pago
                     </h2>
-                    
+
                     {/* Información de Seguridad */}
                     <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                       <div className="flex items-start gap-3">
@@ -647,7 +668,7 @@ function Checkout() {
                             Pago 100% Seguro
                           </p>
                           <p className="text-xs text-green-800">
-                            Tus datos están protegidos. No almacenamos información de tarjetas. 
+                            Tus datos están protegidos. No almacenamos información de tarjetas.
                             El pago se procesa de forma segura a través de Mercado Pago.
                           </p>
                         </div>

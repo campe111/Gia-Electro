@@ -1,13 +1,40 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import ProductCard from '../components/ProductCard'
 import RevealOnScroll from '../components/RevealOnScroll'
+import CategorySlider from '../components/CategorySlider'
 import { products } from '../data/products'
 
 function Catalogo() {
-  const [selectedCategory, setSelectedCategory] = useState('todos')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const urlCategory = searchParams.get('categoria')
+  
+  const [selectedCategory, setSelectedCategory] = useState(urlCategory || 'todos')
   const [selectedBrand, setSelectedBrand] = useState('todos')
   const [searchTerm, setSearchTerm] = useState('')
+
+  // Sincronizar categoría con URL
+  useEffect(() => {
+    if (urlCategory && urlCategory !== selectedCategory) {
+      setSelectedCategory(urlCategory)
+    }
+  }, [urlCategory])
+
+  // Actualizar URL cuando cambia la categoría
+  const handleCategoryChange = (category) => {
+    setSelectedCategory(category)
+    if (category === 'todos') {
+      searchParams.delete('categoria')
+    } else {
+      searchParams.set('categoria', category)
+    }
+    setSearchParams(searchParams, { replace: true })
+  }
+
+  const handleCategorySliderClick = (categoryId) => {
+    handleCategoryChange(categoryId)
+  }
 
   // Obtener categorías únicas
   const categories = ['todos', ...new Set(products.map((p) => p.category))]
@@ -41,6 +68,8 @@ function Catalogo() {
     setSelectedCategory('todos')
     setSelectedBrand('todos')
     setSearchTerm('')
+    searchParams.delete('categoria')
+    setSearchParams(searchParams, { replace: true })
   }
 
   const hasActiveFilters = selectedCategory !== 'todos' || selectedBrand !== 'todos' || searchTerm !== ''
@@ -49,13 +78,21 @@ function Catalogo() {
     <div className="py-12 bg-gray-50 min-h-screen">
       <div className="container mx-auto px-4">
         {/* Header */}
-        <div className="text-center mb-12">
+        <div className="text-center mb-8">
           <h1 className="text-4xl md:text-5xl font-bold text-primary-black mb-4">
             Nuestro <span className="text-primary-red">Catálogo</span>
           </h1>
-          <p className="text-gray-600 max-w-2xl mx-auto">
+          <p className="text-gray-600 max-w-2xl mx-auto mb-8">
             Explora nuestra amplia gama de electrodomésticos
           </p>
+          
+          {/* Category Slider */}
+          <div className="mb-12">
+            <CategorySlider 
+              currentCategory={selectedCategory} 
+              onCategoryClick={handleCategorySliderClick}
+            />
+          </div>
         </div>
 
         {/* Layout con sidebar */}
@@ -94,7 +131,7 @@ function Catalogo() {
                 {categories.map((category) => (
                   <button
                     key={category}
-                    onClick={() => setSelectedCategory(category)}
+                    onClick={() => handleCategoryChange(category)}
                     className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
                       selectedCategory === category
                         ? 'bg-primary-yellow text-primary-black shadow-md'
@@ -172,7 +209,7 @@ function Catalogo() {
 
             {/* Grid de productos */}
             {filteredProducts.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8 items-stretch">
                 {filteredProducts.map((product, idx) => (
                   <RevealOnScroll key={product.id} delayMs={(idx % 4) * 100}>
                     <ProductCard product={product} />

@@ -1,6 +1,7 @@
 import Hero from '../components/Hero'
 import ProductCard from '../components/ProductCard'
 import RevealOnScroll from '../components/RevealOnScroll'
+import CategorySlider from '../components/CategorySlider'
 import { Link } from 'react-router-dom'
 import { products } from '../data/products'
 
@@ -12,20 +13,34 @@ function Home() {
     <div>
       <Hero />
 
+      {/* Category Slider */}
+      <section className="py-12 bg-white">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl md:text-4xl font-bold text-primary-black mb-2">
+              Explora por <span className="text-primary-red">Categoría</span>
+            </h2>
+            <p className="text-gray-600 max-w-2xl mx-auto">
+              Encuentra el electrodoméstico perfecto para tu hogar
+            </p>
+          </div>
+          <CategorySlider />
+        </div>
+      </section>
+
       {/* Productos Destacados */}
-      <section className="py-16 bg-gradient-to-b from-primary-black via-primary-red/30 to-primary-black text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary-red/10 to-transparent"></div>
+      <section className="py-16 bg-gray-50 relative overflow-hidden">
         <div className="container mx-auto px-4 relative z-10">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-              Productos <span className="text-primary-yellow">Destacados</span>
+            <h2 className="text-3xl md:text-4xl font-bold text-primary-black mb-4">
+              Productos <span className="text-primary-red">Destacados</span>
             </h2>
-            <p className="text-gray-300 max-w-2xl mx-auto">
+            <p className="text-gray-600 max-w-2xl mx-auto">
               Descubre nuestra selección de los mejores electrodomésticos
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8 mb-8 items-stretch">
             {featuredProducts.map((product, idx) => (
               <RevealOnScroll key={product.id} delayMs={idx * 100}>
                 <ProductCard product={product} />

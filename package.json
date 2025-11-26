@@ -8,15 +8,13 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "format": "prettier --write \"src/**/*.{js,jsx,json,css}\"",
-    "dev:server": "cd server && npm run dev",
-    "dev:all": "concurrently \"npm run dev:server\" \"npm run dev\""
+    "format": "prettier --write \"src/**/*.{js,jsx,json,css}\""
   },
   "dependencies": {
     "@heroicons/react": "^2.1.1",
+    "@supabase/supabase-js": "^2.83.0",
     "@vercel/analytics": "^1.5.0",
     "clsx": "^2.0.0",
-    "mercadopago": "^2.10.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.0"
@@ -28,7 +26,6 @@
     "@types/react-dom": "^18.2.17",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.16",
-    "concurrently": "^8.2.2",
     "eslint": "^8.55.0",
     "eslint-plugin-react": "^7.33.2",
     "eslint-plugin-react-hooks": "^4.6.0",

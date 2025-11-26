@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { XMarkIcon, EnvelopeIcon, KeyIcon } from '@heroicons/react/24/outline'
 import { useUser } from '../context/UserContext'
-import api from '../services/api'
+import { supabase } from '../config/supabase'
 
 function AuthModal({ isOpen, onClose }) {
   const { login, register } = useUser()
@@ -51,8 +51,7 @@ function AuthModal({ isOpen, onClose }) {
         return
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      const result = register(formData.name, formData.email, formData.password)
+      const result = await register(formData.name, formData.email, formData.password)
 
       if (result.success) {
         resetForm()
@@ -62,8 +61,7 @@ function AuthModal({ isOpen, onClose }) {
       }
     } else {
       // Login
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      const result = login(formData.email, formData.password)
+      const result = await login(formData.email, formData.password)
 
       if (result.success) {
         resetForm()
@@ -95,15 +93,49 @@ function AuthModal({ isOpen, onClose }) {
     setIsLoading(false)
   }
 
-  const handleSocialLogin = (provider) => {
+  const handleSocialLogin = async (provider) => {
     try {
+      setIsLoading(true)
+      setError('')
+
+      // Obtener la URL de redirección (callback URL)
+      const redirectUrl = `${window.location.origin}/auth/callback`
+      console.log('Redireccionando a:', redirectUrl)
+
+      // Usar Supabase Auth para OAuth
       if (provider === 'Google') {
-        window.location.href = api.getGoogleAuthUrl()
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: redirectUrl,
+          },
+        })
+
+        if (error) {
+          console.error('Error en Google OAuth:', error)
+          setError(`Error al iniciar sesión con Google: ${error.message}`)
+          setIsLoading(false)
+        }
+        // Si no hay error, la redirección se hará automáticamente
       } else if (provider === 'Facebook') {
-        window.location.href = api.getFacebookAuthUrl()
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'facebook',
+          options: {
+            redirectTo: redirectUrl,
+          },
+        })
+
+        if (error) {
+          console.error('Error en Facebook OAuth:', error)
+          setError(`Error al iniciar sesión con Facebook: ${error.message}`)
+          setIsLoading(false)
+        }
+        // Si no hay error, la redirección se hará automáticamente
       }
     } catch (error) {
-      setError(`Error al iniciar sesión con ${provider}`)
+      console.error(`Error al iniciar sesión con ${provider}:`, error)
+      setError(`Error al iniciar sesión con ${provider}: ${error.message}`)
+      setIsLoading(false)
     }
   }
 
@@ -177,11 +209,10 @@ function AuthModal({ isOpen, onClose }) {
                 setAuthMethod('email')
                 resetForm()
               }}
-              className={`flex-1 py-2 px-4 text-sm font-medium transition-colors ${
-                authMethod === 'email'
-                  ? 'text-primary-red border-b-2 border-primary-red'
-                  : 'text-gray-600 hover:text-primary-red'
-              }`}
+              className={`flex-1 py-2 px-4 text-sm font-medium transition-colors ${authMethod === 'email'
+                ? 'text-primary-red border-b-2 border-primary-red'
+                : 'text-gray-600 hover:text-primary-red'
+                }`}
             >
               <EnvelopeIcon className="h-5 w-5 inline-block mr-2" />
               Email
@@ -191,11 +222,10 @@ function AuthModal({ isOpen, onClose }) {
                 setAuthMethod('code')
                 resetForm()
               }}
-              className={`flex-1 py-2 px-4 text-sm font-medium transition-colors ${
-                authMethod === 'code'
-                  ? 'text-primary-red border-b-2 border-primary-red'
-                  : 'text-gray-600 hover:text-primary-red'
-              }`}
+              className={`flex-1 py-2 px-4 text-sm font-medium transition-colors ${authMethod === 'code'
+                ? 'text-primary-red border-b-2 border-primary-red'
+                : 'text-gray-600 hover:text-primary-red'
+                }`}
             >
               <KeyIcon className="h-5 w-5 inline-block mr-2" />
               Código
@@ -307,8 +337,8 @@ function AuthModal({ isOpen, onClose }) {
                     ? 'Registrando...'
                     : 'Iniciando sesión...'
                   : isRegister
-                  ? 'Registrarse'
-                  : 'Iniciar Sesión'}
+                    ? 'Registrarse'
+                    : 'Iniciar Sesión'}
               </button>
 
               <div className="text-center">
@@ -382,8 +412,10 @@ function AuthModal({ isOpen, onClose }) {
 
             <div className="mt-4 grid grid-cols-2 gap-3">
               <button
+                type="button"
                 onClick={() => handleSocialLogin('Google')}
-                className="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                disabled={isLoading}
+                className="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
                   <path
@@ -407,8 +439,10 @@ function AuthModal({ isOpen, onClose }) {
               </button>
 
               <button
+                type="button"
                 onClick={() => handleSocialLogin('Facebook')}
-                className="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                disabled={isLoading}
+                className="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg className="h-5 w-5 mr-2" fill="#1877F2" viewBox="0 0 24 24">
                   <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />

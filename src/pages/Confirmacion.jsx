@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useLocation, Link } from 'react-router-dom'
+import { supabase } from '../config/supabase'
 import {
   CheckCircleIcon,
   PrinterIcon,
@@ -12,17 +13,43 @@ function Confirmacion() {
   const [order, setOrder] = useState(null)
 
   useEffect(() => {
-    // Obtener orden del state o del localStorage
-    if (location.state?.order) {
-      setOrder(location.state.order)
-    } else {
-      // Intentar obtener del localStorage
-      const orders = JSON.parse(localStorage.getItem('giaElectroOrders') || '[]')
-      const foundOrder = orders.find((o) => o.id === orderId)
-      if (foundOrder) {
-        setOrder(foundOrder)
+    const fetchOrder = async () => {
+      // Si viene del state (navegación directa), usarlo
+      if (location.state?.order) {
+        setOrder(location.state.order)
+        return
+      }
+
+      // Si no, buscar en Supabase
+      try {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('id', orderId)
+          .single()
+
+        if (error) throw error
+
+        if (data) {
+          // Mapear formato de DB a formato de componente
+          setOrder({
+            id: data.id,
+            date: data.created_at,
+            customer: data.customer_data,
+            shipping: data.shipping_data,
+            items: data.items,
+            total: data.total,
+            status: data.status,
+            paymentMethod: data.payment_data?.processor || 'credit',
+            payment: data.payment_data
+          })
+        }
+      } catch (error) {
+        console.error('Error buscando orden:', error)
       }
     }
+
+    fetchOrder()
   }, [orderId, location.state])
 
   const handlePrint = () => {
