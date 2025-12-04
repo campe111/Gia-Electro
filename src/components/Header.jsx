@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Bars3Icon, XMarkIcon, UserIcon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline'
+import { Bars3Icon, XMarkIcon, UserIcon, ArrowRightOnRectangleIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import CartIcon from './CartIcon'
 import AuthModal from './AuthModal'
 import { useUser } from '../context/UserContext'
+import logoGia from '../../logo-gia.png'
 
 function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -42,75 +43,69 @@ function Header() {
   const navLinks = [
     { path: '/', label: 'Inicio' },
     { path: '/catalogo', label: 'Catálogo' },
+    { path: '/categorias', label: 'Categorías' },
+    { path: '/envios', label: 'Envíos' },
+    { path: '/favoritos', label: 'Favoritos' },
+    { path: '/ubicacion', label: 'Ubicación' },
+    { path: '/ofertas', label: 'Ofertas' },
     { path: '/contacto', label: 'Contacto' },
   ]
 
   return (
-    <header className="bg-gradient-to-b from-primary-black via-primary-red to-primary-yellow text-white shadow-lg sticky top-0 z-50">
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary-red/20 to-transparent overflow-hidden pointer-events-none"></div>
-      <div className="container mx-auto px-4 relative z-10">
-        <div className="flex items-center justify-between h-14 md:h-16 relative z-10">
-          {/* Desktop Navigation - Left */}
-          <nav className="hidden md:flex items-center space-x-6 flex-1">
-            {navLinks.map((link) => (
-              <Link
-                key={link.path}
-                to={link.path}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors shadow-md ${
-                  isActive(link.path)
-                    ? 'bg-primary-yellow text-primary-black font-bold shadow-lg'
-                    : 'text-white hover:text-primary-yellow bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/20'
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-
-          {/* Brand Name - Centered */}
-          <div className="absolute left-0 right-0 flex justify-center items-center h-full z-20 pointer-events-none">
-            <Link 
-              to="/" 
-              className="pointer-events-auto"
-            >
-              <h1 
-                className="brand-title text-2xl md:text-3xl lg:text-4xl font-bold text-white whitespace-nowrap cursor-pointer" 
-                style={{ 
-                  fontFamily: "'Goblin One', cursive",
-                  letterSpacing: '0.05em',
-                  textShadow: '2px 2px 4px rgba(0,0,0,0.5)'
-                }}
-              >
-                Gia Electro
-              </h1>
+    <header className="bg-white text-gray-900 shadow-md sticky top-0 z-50 border-t-4 border-primary-red">
+      <div className="w-full max-w-7xl mx-auto px-4 relative z-10">
+        {/* Fila superior desktop: logo izquierda, búsqueda centro, acciones derecha */}
+        <div className="hidden md:grid grid-cols-[auto,1fr,auto] items-center gap-6 py-2">
+          {/* Logo izquierda */}
+          <div className="flex items-center">
+            <Link to="/" className="flex items-center justify-start">
+              <img
+                src={logoGia}
+                alt="Gia Electro"
+                className="h-14 lg:h-18 w-auto"
+                style={{ transform: 'scale(1.98)', transformOrigin: 'left center' }}
+                loading="lazy"
+                decoding="async"
+              />
             </Link>
           </div>
 
-          {/* Desktop Navigation - Right */}
-          <div className="hidden md:flex items-center justify-end space-x-4 flex-1 relative">
-            <CartIcon />
+          {/* Barra de búsqueda centro */}
+          <div className="flex-1">
+            <div className="relative max-w-2xl mx-auto">
+              <input
+                type="text"
+                placeholder="Buscar productos..."
+                className="w-full rounded-full border border-gray-300 pl-5 pr-11 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-red focus:border-primary-red shadow-sm"
+              />
+              <MagnifyingGlassIcon className="h-5 w-5 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2" />
+            </div>
+          </div>
+
+          {/* Acciones derecha: sesión (sin carrito) */}
+          <div className="flex items-center justify-end gap-4">
             {isAuthenticated ? (
               <div className="relative" ref={userMenuRef}>
                 <button
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                  className="flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors shadow-md text-white hover:text-primary-yellow bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/20 relative z-30"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-gray-800 hover:text-primary-red hover:bg-gray-100 border border-gray-200 bg-white shadow-sm"
                 >
                   <UserIcon className="h-5 w-5" />
                   <span className="hidden lg:inline">
-                    {user?.name || user?.email?.split('@')[0] || 'Usuario'}
+                    {user?.name || user?.email?.split('@')[0] || 'Mi cuenta'}
                   </span>
                 </button>
                 {isUserMenuOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-2xl z-[9999] border-2 border-primary-yellow overflow-hidden">
-                    <div className="px-4 py-3 border-b-2 border-primary-red bg-gradient-to-r from-primary-yellow via-primary-yellow/80 to-primary-red">
-                      <p className="text-sm font-semibold text-primary-black drop-shadow-sm">
-                        {user?.name || user?.email?.split('@')[0] || 'Usuario'}
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-2xl z-[9999] border border-gray-200 overflow-hidden">
+                    <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                      <p className="text-sm font-semibold text-gray-900">
+                        {user?.name || user?.email?.split('@')[0] || 'Mi cuenta'}
                       </p>
-                      <p className="text-xs text-primary-black/80 mt-1 font-medium">{user?.email}</p>
+                      <p className="text-xs text-gray-600 mt-1 font-medium">{user?.email}</p>
                     </div>
                     <button
                       onClick={handleLogout}
-                      className="w-full flex items-center space-x-2 px-4 py-3 text-sm text-white bg-primary-red hover:brightness-125 transition-all font-medium hover:shadow-lg"
+                      className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-600 hover:bg-red-50 font-medium"
                     >
                       <ArrowRightOnRectangleIcon className="h-5 w-5" />
                       <span>Cerrar Sesión</span>
@@ -119,28 +114,39 @@ function Header() {
                 )}
               </div>
             ) : (
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-3">
                 <button
                   onClick={() => setIsAuthModalOpen(true)}
-                  className="px-3 py-1.5 rounded-md text-sm font-medium transition-colors shadow-md text-white hover:text-primary-yellow bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/20"
+                  className="text-sm font-medium text-gray-800 hover:text-primary-red"
                 >
                   Iniciar Sesión
                 </button>
                 <button
                   onClick={() => setIsAuthModalOpen(true)}
-                  className="px-3 py-1.5 rounded-md text-sm font-medium transition-colors shadow-md bg-primary-yellow text-primary-black hover:bg-yellow-500 font-semibold"
+                  className="px-3 py-1.5 rounded-md text-sm font-medium bg-primary-red text-white hover:bg-red-600 shadow-sm"
                 >
                   Registrarse
                 </button>
               </div>
             )}
           </div>
+        </div>
 
-          {/* Mobile Actions */}
-          <div className="md:hidden flex items-center space-x-2 w-full justify-end">
+        {/* Fila superior mobile: logo izquierda, acciones derecha */}
+        <div className="flex md:hidden items-center justify-between py-2">
+          <Link to="/" className="flex items-center">
+            <img
+              src={logoGia}
+              alt="Gia Electro"
+              className="h-10 w-auto"
+              loading="lazy"
+              decoding="async"
+            />
+          </Link>
+          <div className="flex items-center gap-3">
             <CartIcon />
             <button
-              className="p-2 rounded-md text-white hover:text-primary-yellow bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/20 shadow-md"
+              className="p-2 rounded-md text-gray-700 hover:text-primary-red hover:bg-gray-100 border border-gray-200 shadow-sm"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               aria-label="Toggle menu"
             >
@@ -153,19 +159,53 @@ function Header() {
           </div>
         </div>
 
-        {/* Mobile Navigation */}
+        {/* Barra de búsqueda mobile */}
+        <div className="md:hidden pb-2">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Buscar productos..."
+              className="w-full rounded-full border border-gray-300 pl-4 pr-10 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-red focus:border-primary-red shadow-sm"
+            />
+            <MagnifyingGlassIcon className="h-5 w-5 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2" />
+          </div>
+        </div>
+
+        {/* Navegación principal desktop (segunda fila) */}
+        <div className="hidden md:flex items-center justify-center py-2 border-t border-gray-200 text-sm">
+          <nav className="flex items-center gap-8">
+            {navLinks.map((link) => (
+              <Link
+                key={link.path}
+                to={link.path}
+                className={`pb-1 border-b-2 transition-colors inline-flex items-center gap-1 pl-2 first:pl-0 ${
+                  isActive(link.path)
+                    ? 'border-primary-red text-primary-red font-semibold'
+                    : 'border-transparent text-gray-800 hover:text-primary-red hover:border-primary-red'
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+          <div className="ml-4">
+            <CartIcon />
+          </div>
+        </div>
+
+        {/* Navegación mobile desplegable */}
         {isMenuOpen && (
-          <nav className="md:hidden pb-4">
-            <div className="flex flex-col space-y-2">
+          <nav className="md:hidden pb-4 border-t border-gray-200 mt-2">
+            <div className="flex flex-col space-y-2 pt-2">
               {navLinks.map((link) => (
                 <Link
                   key={link.path}
                   to={link.path}
                   onClick={() => setIsMenuOpen(false)}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors shadow-md ${
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors shadow-sm ${
                     isActive(link.path)
-                      ? 'bg-primary-yellow text-primary-black font-bold shadow-lg'
-                      : 'text-white hover:text-primary-yellow bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/20'
+                      ? 'bg-primary-red text-white'
+                      : 'text-gray-800 hover:text-primary-red bg-white hover:bg-red-50 border border-gray-200'
                   }`}
                 >
                   {link.label}
@@ -174,28 +214,28 @@ function Header() {
               <Link
                 to="/carrito"
                 onClick={() => setIsMenuOpen(false)}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors shadow-md ${
+                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors shadow-sm ${
                   isActive('/carrito')
-                    ? 'bg-primary-yellow text-primary-black font-bold shadow-lg'
-                    : 'text-white hover:text-primary-yellow bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/20'
+                    ? 'bg-primary-red text-white'
+                    : 'text-gray-800 hover:text-primary-red bg-white hover:bg-red-50 border border-gray-200'
                 }`}
               >
                 Carrito
               </Link>
               {isAuthenticated ? (
                 <>
-                  <div className="px-3 py-2 text-sm text-white border-b border-white/20">
+                  <div className="px-3 py-2 text-sm text-gray-800 border-t border-gray-200 mt-1">
                     <p className="font-semibold">
                       {user?.name || user?.email?.split('@')[0] || 'Usuario'}
                     </p>
-                    <p className="text-xs text-gray-300">{user?.email}</p>
+                    <p className="text-xs text-gray-500">{user?.email}</p>
                   </div>
                   <button
                     onClick={() => {
                       handleLogout()
                       setIsMenuOpen(false)
                     }}
-                    className="px-3 py-2 rounded-md text-sm font-medium transition-colors shadow-md text-white hover:text-primary-yellow bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/20 flex items-center space-x-2"
+                    className="mt-1 px-3 py-2 rounded-md text-sm font-medium transition-colors shadow-sm text-red-600 hover:bg-red-50 border border-red-200 flex items-center gap-2"
                   >
                     <ArrowRightOnRectangleIcon className="h-5 w-5" />
                     <span>Cerrar Sesión</span>
@@ -208,7 +248,7 @@ function Header() {
                       setIsAuthModalOpen(true)
                       setIsMenuOpen(false)
                     }}
-                    className="px-3 py-2 rounded-md text-sm font-medium transition-colors shadow-md text-white hover:text-primary-yellow bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/20 w-full text-left"
+                    className="mt-1 px-3 py-2 rounded-md text-sm font-medium transition-colors shadow-sm text-gray-800 hover:text-primary-red bg-white hover:bg-red-50 border border-gray-200 w-full text-left"
                   >
                     Iniciar Sesión
                   </button>
@@ -217,7 +257,7 @@ function Header() {
                       setIsAuthModalOpen(true)
                       setIsMenuOpen(false)
                     }}
-                    className="px-3 py-2 rounded-md text-sm font-medium transition-colors shadow-md bg-primary-yellow text-primary-black hover:bg-yellow-500 font-semibold w-full text-left"
+                    className="px-3 py-2 rounded-md text-sm font-medium transition-colors shadow-sm bg-primary-red text-white hover:bg-red-600 w-full text-left mt-1"
                   >
                     Registrarse
                   </button>

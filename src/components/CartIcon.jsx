@@ -1,5 +1,5 @@
+
 import { Link } from 'react-router-dom'
-import { ShoppingCartIcon } from '@heroicons/react/24/outline'
 import { useCart } from '../context/CartContext'
 
 function CartIcon() {
@@ -9,12 +9,12 @@ function CartIcon() {
   return (
     <Link
       to="/carrito"
-      className="relative p-2 rounded-md text-white hover:text-primary-yellow bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/20 shadow-md transition-colors"
+      className="relative text-sm font-medium text-gray-800 hover:text-primary-red pb-1 border-b-2 border-transparent hover:border-primary-red inline-flex items-center gap-1"
       aria-label="Carrito de compras"
     >
-      <ShoppingCartIcon className="h-6 w-6" />
+      <span>Carrito</span>
       {totalItems > 0 && (
-        <span className="absolute -top-1 -right-1 bg-primary-red text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center min-w-[20px]">
+        <span className="bg-primary-red text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center min-w-[16px] leading-none">
           {totalItems > 99 ? '99+' : totalItems}
         </span>
       )}
@@ -23,4 +23,3 @@ function CartIcon() {
 }
 
 export default CartIcon
-
