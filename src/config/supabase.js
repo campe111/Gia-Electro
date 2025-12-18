@@ -11,9 +11,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
   if (!supabaseUrl) missingVars.push('VITE_SUPABASE_URL')
   if (!supabaseAnonKey) missingVars.push('VITE_SUPABASE_ANON_KEY')
   
+  const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')
+  const envMessage = isVercel 
+    ? 'Configura estas variables en Vercel Dashboard → Settings → Environment Variables'
+    : 'Configura estas variables en tu archivo .env'
+  
   throw new Error(
     `❌ Faltan variables de entorno requeridas: ${missingVars.join(', ')}\n` +
-    `Por favor, configura estas variables en tu archivo .env`
+    `${envMessage}\n` +
+    `Después de configurarlas, haz un redeploy en Vercel.`
   )
 }
 
