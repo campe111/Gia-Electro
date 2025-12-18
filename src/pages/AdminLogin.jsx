@@ -64,7 +64,7 @@ function AdminLogin() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow focus:border-transparent"
-                placeholder="admin@giaelectro.com"
+                placeholder="giaelectro32@gmail.com"
                 required
               />
             </div>
@@ -98,7 +98,10 @@ function AdminLogin() {
 
           <div className="mt-6 text-center">
             <p className="text-xs text-gray-500">
-              Credenciales por defecto: admin@giaelectro.com / admin123
+              Panel de Super Administración
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              Email: giaelectro32@gmail.com
             </p>
           </div>
         </div>

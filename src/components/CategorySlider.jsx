@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { useState, useRef, useEffect } from 'react'
+import { getPlaceholderImage } from '../utils/imageHelper'
 
 const categories = [
   {
@@ -183,7 +184,7 @@ function CategorySlider({ currentCategory = null, onCategoryClick }) {
                   alt={category.name}
                   className="w-full h-full object-contain p-4 sm:p-5 group-hover:scale-105 transition-transform duration-300"
                   onError={(e) => {
-                    e.target.src = 'https://via.placeholder.com/400x300?text=' + encodeURIComponent(category.name)
+                    e.target.src = getPlaceholderImage(400, 300, category.name)
                   }}
                 />
                 <div

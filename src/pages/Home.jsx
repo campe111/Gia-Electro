@@ -3,9 +3,10 @@ import ProductCard from '../components/ProductCard'
 import RevealOnScroll from '../components/RevealOnScroll'
 import CategorySlider from '../components/CategorySlider'
 import { Link } from 'react-router-dom'
-import { products } from '../data/products'
+import { useProducts } from '../hooks/useProducts'
 
 function Home() {
+  const products = useProducts()
   // Mostrar solo los primeros 6 productos destacados
   const featuredProducts = products.slice(0, 6)
 

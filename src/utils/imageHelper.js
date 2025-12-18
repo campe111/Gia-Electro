@@ -62,3 +62,28 @@ export function getProductImageSrc(productId, fallbackUrl) {
   }
 }
 
+/**
+ * Genera un placeholder local usando SVG data URI
+ * No depende de servicios externos y siempre funciona
+ */
+export function getPlaceholderImage(width = 400, height = 300, text = 'Imagen no disponible') {
+  const svg = `
+    <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="#e5e7eb"/>
+      <text 
+        x="50%" 
+        y="50%" 
+        font-family="Arial, sans-serif" 
+        font-size="16" 
+        fill="#6b7280" 
+        text-anchor="middle" 
+        dominant-baseline="middle"
+      >
+        ${text}
+      </text>
+    </svg>
+  `.trim()
+  
+  return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`
+}
+

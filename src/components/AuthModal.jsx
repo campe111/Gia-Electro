@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
 import { XMarkIcon, EnvelopeIcon, KeyIcon } from '@heroicons/react/24/outline'
 import { useUser } from '../context/UserContext'
+import { useAdmin } from '../context/AdminContext'
 import { supabase } from '../config/supabase'
 
 function AuthModal({ isOpen, onClose }) {
+  const navigate = useNavigate()
   const { login, register } = useUser()
+  const { login: adminLogin } = useAdmin()
   const [authMethod, setAuthMethod] = useState('email') // 'email', 'code', 'google', 'facebook'
   const [isRegister, setIsRegister] = useState(false)
   const [formData, setFormData] = useState({
@@ -60,7 +64,29 @@ function AuthModal({ isOpen, onClose }) {
         setError(result.error || 'Error al registrar usuario')
       }
     } else {
-      // Login
+      // Verificar si son credenciales de admin primero
+      const ADMIN_EMAIL = 'giaelectro32@gmail.com'
+      const ADMIN_PASSWORD = 'Electrogiacolonia'
+      
+      if (formData.email === ADMIN_EMAIL && formData.password === ADMIN_PASSWORD) {
+        // Login como admin
+        const adminResult = adminLogin(formData.email, formData.password)
+        
+        if (adminResult.success) {
+          resetForm()
+          onClose()
+          // El Layout detectará que el admin está autenticado y mostrará el dashboard
+          // No necesitamos redirigir, solo recargar la página actual
+          window.location.reload()
+          return
+        } else {
+          setError(adminResult.error || 'Error al iniciar sesión como administrador')
+          setIsLoading(false)
+          return
+        }
+      }
+      
+      // Login normal de usuario
       const result = await login(formData.email, formData.password)
 
       if (result.success) {
@@ -100,7 +126,8 @@ function AuthModal({ isOpen, onClose }) {
 
       // Obtener la URL de redirección (callback URL)
       const redirectUrl = `${window.location.origin}/auth/callback`
-      console.log('Redireccionando a:', redirectUrl)
+      console.log('Iniciando OAuth con:', provider)
+      console.log('URL de redirección:', redirectUrl)
 
       // Usar Supabase Auth para OAuth
       if (provider === 'Google') {
@@ -108,6 +135,10 @@ function AuthModal({ isOpen, onClose }) {
           provider: 'google',
           options: {
             redirectTo: redirectUrl,
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'consent',
+            },
           },
         })
 
@@ -115,8 +146,19 @@ function AuthModal({ isOpen, onClose }) {
           console.error('Error en Google OAuth:', error)
           setError(`Error al iniciar sesión con Google: ${error.message}`)
           setIsLoading(false)
+          return
         }
-        // Si no hay error, la redirección se hará automáticamente
+
+        // Si hay data y una URL, redirigir manualmente
+        if (data?.url) {
+          console.log('Redirigiendo a Google OAuth:', data.url)
+          window.location.href = data.url
+          // No reseteamos isLoading porque la página se redirigirá
+        } else {
+          console.warn('No se recibió URL de redirección de Google OAuth')
+          setError('No se pudo iniciar el proceso de autenticación con Google. Por favor, verifica la configuración.')
+          setIsLoading(false)
+        }
       } else if (provider === 'Facebook') {
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'facebook',
@@ -129,12 +171,21 @@ function AuthModal({ isOpen, onClose }) {
           console.error('Error en Facebook OAuth:', error)
           setError(`Error al iniciar sesión con Facebook: ${error.message}`)
           setIsLoading(false)
+          return
         }
-        // Si no hay error, la redirección se hará automáticamente
+
+        if (data?.url) {
+          console.log('Redirigiendo a Facebook OAuth:', data.url)
+          window.location.href = data.url
+        } else {
+          console.warn('No se recibió URL de redirección de Facebook OAuth')
+          setError('No se pudo iniciar el proceso de autenticación con Facebook. Por favor, verifica la configuración.')
+          setIsLoading(false)
+        }
       }
     } catch (error) {
       console.error(`Error al iniciar sesión con ${provider}:`, error)
-      setError(`Error al iniciar sesión con ${provider}: ${error.message}`)
+      setError(`Error al iniciar sesión con ${provider}: ${error.message || 'Error desconocido'}`)
       setIsLoading(false)
     }
   }
@@ -413,9 +464,14 @@ function AuthModal({ isOpen, onClose }) {
             <div className="mt-4 grid grid-cols-2 gap-3">
               <button
                 type="button"
-                onClick={() => handleSocialLogin('Google')}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  handleSocialLogin('Google')
+                }}
                 disabled={isLoading}
                 className="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Iniciar sesión con Google"
               >
                 <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
                   <path
@@ -440,9 +496,14 @@ function AuthModal({ isOpen, onClose }) {
 
               <button
                 type="button"
-                onClick={() => handleSocialLogin('Facebook')}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  handleSocialLogin('Facebook')
+                }}
                 disabled={isLoading}
                 className="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Iniciar sesión con Facebook"
               >
                 <svg className="h-5 w-5 mr-2" fill="#1877F2" viewBox="0 0 24 24">
                   <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />

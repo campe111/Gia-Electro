@@ -4,9 +4,10 @@ import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import ProductCard from '../components/ProductCard'
 import RevealOnScroll from '../components/RevealOnScroll'
 import CategorySlider from '../components/CategorySlider'
-import { products } from '../data/products'
+import { useProducts } from '../hooks/useProducts'
 
 function Catalogo() {
+  const products = useProducts()
   const [searchParams, setSearchParams] = useSearchParams()
   const urlCategory = searchParams.get('categoria')
   
@@ -187,7 +188,7 @@ function Catalogo() {
                 <h3 className="text-sm font-semibold text-gray-700 mb-3">
                   Recomendados
                 </h3>
-                <div className="space-y-4">
+                <div className="bg-stone-200 rounded-lg p-4 space-y-4">
                   {filteredProducts.slice(0, 3).map((product, idx) => (
                     <RevealOnScroll key={`rec-${product.id}`} delayMs={idx * 120}>
                       <ProductCard product={product} enableContainer />

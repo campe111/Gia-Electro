@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
 import { supabase } from '../config/supabase'
-import MercadoPagoCheckout from '../components/MercadoPagoCheckout'
+import { sendOrderEmail } from '../services/emailService'
 import {
   CreditCardIcon,
   TruckIcon,
@@ -74,8 +74,8 @@ function Checkout() {
 
   const sanitizeInput = (input) => {
     // Sanitización básica para prevenir XSS
+    // No aplicamos trim() aquí para permitir espacios mientras el usuario escribe
     return input
-      .trim()
       .replace(/[<>]/g, '')
       .replace(/javascript:/gi, '')
       .replace(/on\w+=/gi, '')
@@ -231,7 +231,7 @@ function Checkout() {
     }
   }
 
-  const handlePaymentSuccess = async (paymentData) => {
+  const handlePaymentSuccess = async () => {
     if (!formData.acceptTerms) {
       setErrors({ acceptTerms: 'Debes aceptar los términos y condiciones' })
       return
@@ -243,7 +243,7 @@ function Checkout() {
       // Generar ID de orden único
       const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
 
-      // Guardar orden con información de pago de Mercado Pago
+      // Guardar orden
       const order = {
         id: orderId,
         customer: {
@@ -261,15 +261,9 @@ function Checkout() {
         },
         items: cartItems,
         total: getTotalPrice(),
-        paymentMethod: 'mercadopago',
-        payment: {
-          payment_id: paymentData.payment_id,
-          status: paymentData.status,
-          preference_id: paymentData.preference_id,
-          processor: 'Mercado Pago',
-        },
+        paymentMethod: formData.paymentMethod,
         date: new Date().toISOString(),
-        status: paymentData.status === 'approved' ? 'paid' : 'pending',
+        status: 'pending',
       }
 
       // Guardar orden en Supabase
@@ -293,13 +287,10 @@ function Checkout() {
             },
             items: cartItems,
             total: getTotalPrice(),
-            status: paymentData.status === 'approved' ? 'paid' : 'pending',
-            payment_status: paymentData.status === 'approved' ? 'paid' : 'pending',
+            status: 'pending',
+            payment_status: 'pending',
             payment_data: {
-              payment_id: paymentData.payment_id,
-              status: paymentData.status,
-              preference_id: paymentData.preference_id,
-              processor: 'Mercado Pago',
+              payment_method: formData.paymentMethod,
             },
             // Si el usuario está autenticado, guardar su ID
             user_id: (await supabase.auth.getUser()).data.user?.id || null
@@ -307,6 +298,15 @@ function Checkout() {
         ])
 
       if (supabaseError) throw supabaseError
+
+      // Enviar email con los detalles del pedido a Gia Electro
+      try {
+        await sendOrderEmail(order)
+        console.log('Email de pedido enviado exitosamente')
+      } catch (emailError) {
+        // No bloquear el proceso si el email falla
+        console.error('Error enviando email (no crítico):', emailError)
+      }
 
       // Limpiar carrito
       clearCart()
@@ -322,11 +322,18 @@ function Checkout() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    // La validación y el pago se manejan en el componente MercadoPagoCheckout
+    
+    if (!validateStep3()) {
+      return
+    }
+
     if (!formData.acceptTerms) {
       setErrors({ acceptTerms: 'Debes aceptar los términos y condiciones' })
       return
     }
+
+    // Procesar el pago
+    await handlePaymentSuccess()
   }
 
   const totalPrice = getTotalPrice()
@@ -426,7 +433,7 @@ function Checkout() {
                           name="firstName"
                           value={formData.firstName}
                           onChange={handleInputChange}
-                          className={`w-full px-4 py-3 rounded-lg border ${errors.firstName
+                          className={`w-full px-4 py-3 bg-white rounded-lg border ${errors.firstName
                             ? 'border-red-500'
                             : 'border-gray-300'
                             } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
@@ -451,7 +458,7 @@ function Checkout() {
                           name="lastName"
                           value={formData.lastName}
                           onChange={handleInputChange}
-                          className={`w-full px-4 py-3 rounded-lg border ${errors.lastName
+                          className={`w-full px-4 py-3 bg-white rounded-lg border ${errors.lastName
                             ? 'border-red-500'
                             : 'border-gray-300'
                             } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
@@ -476,7 +483,7 @@ function Checkout() {
                           name="email"
                           value={formData.email}
                           onChange={handleInputChange}
-                          className={`w-full px-4 py-3 rounded-lg border ${errors.email ? 'border-red-500' : 'border-gray-300'
+                          className={`w-full px-4 py-3 bg-white rounded-lg border ${errors.email ? 'border-red-500' : 'border-gray-300'
                             } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
                           required
                         />
@@ -499,7 +506,7 @@ function Checkout() {
                           name="phone"
                           value={formData.phone}
                           onChange={handleInputChange}
-                          className={`w-full px-4 py-3 rounded-lg border ${errors.phone ? 'border-red-500' : 'border-gray-300'
+                          className={`w-full px-4 py-3 bg-white rounded-lg border ${errors.phone ? 'border-red-500' : 'border-gray-300'
                             } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
                           required
                         />
@@ -533,7 +540,7 @@ function Checkout() {
                           name="address"
                           value={formData.address}
                           onChange={handleInputChange}
-                          className={`w-full px-4 py-3 rounded-lg border ${errors.address
+                          className={`w-full px-4 py-3 bg-white rounded-lg border ${errors.address
                             ? 'border-red-500'
                             : 'border-gray-300'
                             } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
@@ -559,7 +566,7 @@ function Checkout() {
                             name="city"
                             value={formData.city}
                             onChange={handleInputChange}
-                            className={`w-full px-4 py-3 rounded-lg border ${errors.city
+                            className={`w-full px-4 py-3 bg-white rounded-lg border ${errors.city
                               ? 'border-red-500'
                               : 'border-gray-300'
                               } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
@@ -584,7 +591,7 @@ function Checkout() {
                             name="state"
                             value={formData.state}
                             onChange={handleInputChange}
-                            className={`w-full px-4 py-3 rounded-lg border ${errors.state
+                            className={`w-full px-4 py-3 bg-white rounded-lg border ${errors.state
                               ? 'border-red-500'
                               : 'border-gray-300'
                               } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
@@ -609,7 +616,7 @@ function Checkout() {
                             name="zipCode"
                             value={formData.zipCode}
                             onChange={handleInputChange}
-                            className={`w-full px-4 py-3 rounded-lg border ${errors.zipCode
+                            className={`w-full px-4 py-3 bg-white rounded-lg border ${errors.zipCode
                               ? 'border-red-500'
                               : 'border-gray-300'
                               } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
@@ -634,7 +641,7 @@ function Checkout() {
                             name="country"
                             value={formData.country}
                             onChange={handleInputChange}
-                            className={`w-full px-4 py-3 rounded-lg border ${errors.country
+                            className={`w-full px-4 py-3 bg-white rounded-lg border ${errors.country
                               ? 'border-red-500'
                               : 'border-gray-300'
                               } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
@@ -669,40 +676,148 @@ function Checkout() {
                           </p>
                           <p className="text-xs text-green-800">
                             Tus datos están protegidos. No almacenamos información de tarjetas.
-                            El pago se procesa de forma segura a través de Mercado Pago.
                           </p>
                         </div>
                       </div>
                     </div>
 
-                    {/* Componente de Mercado Pago */}
-                    <MercadoPagoCheckout
-                      orderData={{
-                        id: `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-                        customer: {
-                          firstName: formData.firstName,
-                          lastName: formData.lastName,
-                          email: formData.email,
-                          phone: formData.phone,
-                        },
-                        shipping: {
-                          address: formData.address,
-                          city: formData.city,
-                          state: formData.state,
-                          zipCode: formData.zipCode,
-                          country: formData.country,
-                        },
-                        items: cartItems,
-                        total: totalPrice,
-                      }}
-                      onPaymentSuccess={(paymentData) => {
-                        handlePaymentSuccess(paymentData)
-                      }}
-                      onPaymentError={(error) => {
-                        setErrors({ submit: error.message || 'Error al procesar el pago' })
-                        setIsProcessing(false)
-                      }}
-                    />
+                    {/* Método de Pago */}
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Método de Pago *
+                        </label>
+                        <select
+                          name="paymentMethod"
+                          value={formData.paymentMethod}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                        >
+                          <option value="credit">Tarjeta de Crédito</option>
+                          <option value="debit">Tarjeta de Débito</option>
+                          <option value="transfer">Transferencia Bancaria</option>
+                        </select>
+                      </div>
+
+                      {formData.paymentMethod === 'credit' || formData.paymentMethod === 'debit' ? (
+                        <div className="space-y-4">
+                          <div>
+                            <label
+                              htmlFor="cardNumber"
+                              className="block text-sm font-medium text-gray-700 mb-2"
+                            >
+                              Número de Tarjeta *
+                            </label>
+                            <input
+                              type="text"
+                              id="cardNumber"
+                              name="cardNumber"
+                              value={formData.cardNumber}
+                              onChange={handleInputChange}
+                              placeholder="1234 5678 9012 3456"
+                              maxLength="19"
+                              className={`w-full px-4 py-3 bg-white rounded-lg border ${errors.cardNumber
+                                ? 'border-red-500'
+                                : 'border-gray-300'
+                                } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                            />
+                            {errors.cardNumber && (
+                              <p className="text-red-500 text-sm mt-1">
+                                {errors.cardNumber}
+                              </p>
+                            )}
+                          </div>
+
+                          <div>
+                            <label
+                              htmlFor="cardName"
+                              className="block text-sm font-medium text-gray-700 mb-2"
+                            >
+                              Nombre en la Tarjeta *
+                            </label>
+                            <input
+                              type="text"
+                              id="cardName"
+                              name="cardName"
+                              value={formData.cardName}
+                              onChange={handleInputChange}
+                              placeholder="JUAN PEREZ"
+                              className={`w-full px-4 py-3 bg-white rounded-lg border ${errors.cardName
+                                ? 'border-red-500'
+                                : 'border-gray-300'
+                                } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                            />
+                            {errors.cardName && (
+                              <p className="text-red-500 text-sm mt-1">
+                                {errors.cardName}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label
+                                htmlFor="cardExpiry"
+                                className="block text-sm font-medium text-gray-700 mb-2"
+                              >
+                                Fecha de Expiración *
+                              </label>
+                              <input
+                                type="text"
+                                id="cardExpiry"
+                                name="cardExpiry"
+                                value={formData.cardExpiry}
+                                onChange={handleInputChange}
+                                placeholder="MM/AA"
+                                maxLength="5"
+                                className={`w-full px-4 py-3 bg-white rounded-lg border ${errors.cardExpiry
+                                  ? 'border-red-500'
+                                  : 'border-gray-300'
+                                  } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                              />
+                              {errors.cardExpiry && (
+                                <p className="text-red-500 text-sm mt-1">
+                                  {errors.cardExpiry}
+                                </p>
+                              )}
+                            </div>
+
+                            <div>
+                              <label
+                                htmlFor="cardCVC"
+                                className="block text-sm font-medium text-gray-700 mb-2"
+                              >
+                                CVC *
+                              </label>
+                              <input
+                                type="text"
+                                id="cardCVC"
+                                name="cardCVC"
+                                value={formData.cardCVC}
+                                onChange={handleInputChange}
+                                placeholder="123"
+                                maxLength="4"
+                                className={`w-full px-4 py-3 bg-white rounded-lg border ${errors.cardCVC
+                                  ? 'border-red-500'
+                                  : 'border-gray-300'
+                                  } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                              />
+                              {errors.cardCVC && (
+                                <p className="text-red-500 text-sm mt-1">
+                                  {errors.cardCVC}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                          <p className="text-sm text-blue-800">
+                            Recibirás las instrucciones de transferencia por email después de confirmar tu pedido.
+                          </p>
+                        </div>
+                      )}
+                    </div>
 
                     <div>
                       <label className="flex items-start space-x-2 cursor-pointer">

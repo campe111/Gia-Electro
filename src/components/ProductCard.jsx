@@ -3,13 +3,14 @@ import { Link } from 'react-router-dom'
 import { ShoppingCartIcon, HeartIcon } from '@heroicons/react/24/outline'
 import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid'
 import { useCart } from '../context/CartContext'
+import { getPlaceholderImage } from '../utils/imageHelper'
 
 function ProductCard({ product, enableContainer = false }) {
   const { id, name, price, image, category, description } = product
   
   // Si la imagen ya es una ruta local (empieza con /images/), usarla directamente
   // Si es una URL externa, usarla como fallback
-  const [imageSrc, setImageSrc] = useState(image || 'https://via.placeholder.com/300x200?text=Imagen+No+Disponible')
+  const [imageSrc, setImageSrc] = useState(image || getPlaceholderImage(300, 200, 'Imagen no disponible'))
   const [isFavorite, setIsFavorite] = useState(false)
   
   const previousPrice =
@@ -58,9 +59,10 @@ function ProductCard({ product, enableContainer = false }) {
   }
 
   const handleImageError = (e) => {
-    // Si la imagen local falla, usar placeholder
-    setImageSrc('https://via.placeholder.com/300x200?text=Imagen+No+Disponible')
-    e.target.src = 'https://via.placeholder.com/300x200?text=Imagen+No+Disponible'
+    // Si la imagen local falla, usar placeholder local
+    const placeholder = getPlaceholderImage(300, 200, 'Imagen no disponible')
+    setImageSrc(placeholder)
+    e.target.src = placeholder
   }
 
   return (

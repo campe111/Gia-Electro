@@ -2,6 +2,28 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAdmin } from '../context/AdminContext'
 import { supabase } from '../config/supabase'
+import { createClient } from '@supabase/supabase-js'
+import { sendCustomerConfirmationEmail } from '../services/emailService'
+import { getPlaceholderImage } from '../utils/imageHelper'
+
+// Cliente de Supabase con service_role para el admin (bypass RLS)
+const supabaseAdmin = (() => {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://worpraelmlhsdkvuapbb.supabase.co'
+  const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY
+  
+  // Si hay service_role key, usarla (bypass RLS)
+  if (serviceRoleKey) {
+    return createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
+  }
+  
+  // Si no, usar el cliente normal (requiere políticas RLS actualizadas)
+  return supabase
+})()
 import {
   ArrowLeftIcon,
   MagnifyingGlassIcon,
@@ -14,6 +36,7 @@ import {
   ClockIcon,
   CurrencyDollarIcon,
   ShoppingBagIcon,
+  PlusIcon,
 } from '@heroicons/react/24/outline'
 
 const ORDER_STATUSES = {
@@ -33,6 +56,10 @@ function AdminDashboard() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('todos')
   const [selectedOrder, setSelectedOrder] = useState(null)
+  const [isSendingEmail, setIsSendingEmail] = useState(false)
+  const [emailStatus, setEmailStatus] = useState({ type: '', message: '' })
+  const [showAddOrderModal, setShowAddOrderModal] = useState(false)
+  const [activeTab, setActiveTab] = useState('pedidos') // 'pedidos' o 'productos'
 
   useEffect(() => {
     loadOrders()
@@ -42,17 +69,57 @@ function AdminDashboard() {
     filterOrders()
   }, [searchTerm, statusFilter, orders])
 
+  const filterOrders = () => {
+    let filtered = orders
+
+    // Filtrar por búsqueda
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase()
+      filtered = filtered.filter(
+        (order) =>
+          order.id.toLowerCase().includes(search) ||
+          order.customer.email.toLowerCase().includes(search) ||
+          `${order.customer.firstName} ${order.customer.lastName}`.toLowerCase().includes(search)
+      )
+    }
+
+    // Filtrar por estado
+    if (statusFilter !== 'todos') {
+      filtered = filtered.filter((order) => order.status === statusFilter)
+    }
+
+    setFilteredOrders(filtered)
+  }
+
   const loadOrders = async () => {
     try {
-      const { data, error } = await supabase
+      // Usar supabaseAdmin que puede tener service_role key o el cliente normal
+      const { data, error } = await supabaseAdmin
         .from('orders')
         .select('*')
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error('Error detallado cargando órdenes:', error)
+        
+        // Si es un error de permisos RLS, mostrar mensaje específico
+        if (error.code === '42501' || error.message.includes('permission') || error.message.includes('policy')) {
+          alert(
+            'Error de permisos: Las políticas RLS de Supabase están bloqueando el acceso.\n\n' +
+            'Por favor, ejecuta el script SQL en Supabase:\n' +
+            '1. Ve a tu proyecto en Supabase\n' +
+            '2. Abre el SQL Editor\n' +
+            '3. Ejecuta el archivo: server/update-rls-policies.sql\n\n' +
+            'O contacta al desarrollador para configurar las políticas correctamente.'
+          )
+          throw error
+        }
+        
+        throw error
+      }
 
       // Mapear datos de Supabase al formato del componente
-      const formattedOrders = data.map(order => ({
+      const formattedOrders = (data || []).map(order => ({
         id: order.id,
         date: order.created_at,
         customer: order.customer_data,
@@ -67,6 +134,7 @@ function AdminDashboard() {
       }))
 
       setOrders(formattedOrders)
+      console.log(`✅ Cargadas ${formattedOrders.length} órdenes`)
     } catch (error) {
       console.error('Error cargando órdenes:', error)
       alert('Error cargando órdenes: ' + error.message)
@@ -93,7 +161,7 @@ function AdminDashboard() {
         }
       }
 
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from('orders')
         .update(updates)
         .eq('id', orderId)
@@ -115,45 +183,85 @@ function AdminDashboard() {
       })
       setOrders(updatedOrders)
 
-      // Simular envío de email de notificación
-      sendNotificationEmail(orderId, newStatus)
+      // Enviar email de notificación al cliente
+      const updatedOrder = updatedOrders.find(o => o.id === orderId)
+      if (updatedOrder) {
+        await sendNotificationEmail(updatedOrder, newStatus)
+      }
     } catch (error) {
       console.error('Error actualizando orden:', error)
       alert('Error actualizando orden: ' + error.message)
     }
   }
 
-  const sendNotificationEmail = (orderId, status) => {
-    const order = orders.find((o) => o.id === orderId)
+  const sendNotificationEmail = async (order, status) => {
     if (!order) return
 
-    const statusMessages = {
-      processing: 'Tu pedido está siendo procesado',
-      paid: 'Tu pago ha sido confirmado',
-      shipped: 'Tu pedido ha sido enviado',
-      delivered: 'Tu pedido ha sido entregado',
-      cancelled: 'Tu pedido ha sido cancelado',
+    try {
+      const result = await sendCustomerConfirmationEmail(order, status)
+      
+      if (result.success) {
+        console.log(`✅ Email de confirmación enviado a ${order.customer.email}`)
+        
+        // Guardar notificación
+        const savedNotifications = JSON.parse(localStorage.getItem('adminNotifications') || '[]')
+        savedNotifications.push({
+          id: Date.now(),
+          orderId: order.id,
+          email: order.customer.email,
+          status,
+          date: new Date().toISOString(),
+        })
+        localStorage.setItem('adminNotifications', JSON.stringify(savedNotifications))
+      } else {
+        console.warn('Email no enviado, pero guardado para procesamiento posterior')
+      }
+    } catch (error) {
+      console.error('Error enviando email de notificación:', error)
     }
+  }
 
-    // En producción, esto sería una llamada a un servicio de email
-    console.log(`📧 Email enviado a ${order.customer.email}:`, {
-      subject: `Actualización de Pedido #${orderId}`,
-      message: statusMessages[status] || 'Estado de tu pedido actualizado',
-      orderId,
-      status,
-    })
+  const handleSendConfirmationEmail = async (order) => {
+    setIsSendingEmail(true)
+    setEmailStatus({ type: '', message: '' })
 
-    // Simular guardar notificaciones
-    const savedNotifications = JSON.parse(localStorage.getItem('adminNotifications') || '[]')
-    savedNotifications.push({
-      id: Date.now(),
-      orderId,
-      email: order.customer.email,
-      status,
-      message: statusMessages[status],
-      date: new Date().toISOString(),
-    })
-    localStorage.setItem('adminNotifications', JSON.stringify(savedNotifications))
+    try {
+      const result = await sendCustomerConfirmationEmail(order, order.status)
+      
+      if (result.success) {
+        setEmailStatus({
+          type: 'success',
+          message: `Email de confirmación enviado exitosamente a ${order.customer.email}`
+        })
+        
+        // Guardar notificación
+        const savedNotifications = JSON.parse(localStorage.getItem('adminNotifications') || '[]')
+        savedNotifications.push({
+          id: Date.now(),
+          orderId: order.id,
+          email: order.customer.email,
+          status: order.status,
+          date: new Date().toISOString(),
+        })
+        localStorage.setItem('adminNotifications', JSON.stringify(savedNotifications))
+      } else {
+        setEmailStatus({
+          type: 'warning',
+          message: result.message || 'Email guardado para envío posterior'
+        })
+      }
+    } catch (error) {
+      setEmailStatus({
+        type: 'error',
+        message: `Error enviando email: ${error.message}`
+      })
+    } finally {
+      setIsSendingEmail(false)
+      // Limpiar mensaje después de 5 segundos
+      setTimeout(() => {
+        setEmailStatus({ type: '', message: '' })
+      }, 5000)
+    }
   }
 
   const getStatistics = () => {
@@ -174,7 +282,8 @@ function AdminDashboard() {
 
   const handleLogout = () => {
     logout()
-    navigate('/admin/login')
+    // Redirigir al home para que el Layout muestre el contenido normal
+    navigate('/')
   }
 
   return (
@@ -202,8 +311,39 @@ function AdminDashboard() {
       </header>
 
       <div className="container mx-auto px-4 py-8">
-        {/* Estadísticas */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        {/* Tabs de Navegación */}
+        <div className="bg-white rounded-lg shadow-md mb-6">
+          <div className="flex border-b border-gray-200">
+            <button
+              onClick={() => setActiveTab('pedidos')}
+              className={`flex-1 px-6 py-4 font-semibold transition-colors ${
+                activeTab === 'pedidos'
+                  ? 'text-primary-red border-b-2 border-primary-red bg-red-50'
+                  : 'text-gray-600 hover:text-primary-red'
+              }`}
+            >
+              <ShoppingBagIcon className="h-5 w-5 inline-block mr-2" />
+              Pedidos
+            </button>
+            <button
+              onClick={() => setActiveTab('productos')}
+              className={`flex-1 px-6 py-4 font-semibold transition-colors ${
+                activeTab === 'productos'
+                  ? 'text-primary-red border-b-2 border-primary-red bg-red-50'
+                  : 'text-gray-600 hover:text-primary-red'
+              }`}
+            >
+              <PlusIcon className="h-5 w-5 inline-block mr-2" />
+              Productos
+            </button>
+          </div>
+        </div>
+
+        {/* Contenido según el tab activo */}
+        {activeTab === 'pedidos' ? (
+          <>
+            {/* Estadísticas */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -382,6 +522,10 @@ function AdminDashboard() {
             </table>
           </div>
         </div>
+          </>
+        ) : (
+          <ProductManagementSection />
+        )}
       </div>
 
       {/* Modal de Detalles */}
@@ -465,20 +609,93 @@ function AdminDashboard() {
                 </div>
               </div>
 
+              {emailStatus.message && (
+                <div className={`mb-4 p-4 rounded-lg ${
+                  emailStatus.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' :
+                  emailStatus.type === 'error' ? 'bg-red-50 border border-red-200 text-red-800' :
+                  'bg-yellow-50 border border-yellow-200 text-yellow-800'
+                }`}>
+                  <p className="text-sm">{emailStatus.message}</p>
+                </div>
+              )}
+
               <div className="mt-6 flex gap-4">
                 <button
-                  onClick={() => {
-                    sendNotificationEmail(
-                      selectedOrder.id,
-                      selectedOrder.status
-                    )
-                    alert('Email de notificación enviado')
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  onClick={() => handleSendConfirmationEmail(selectedOrder)}
+                  disabled={isSendingEmail}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <EnvelopeIcon className="h-5 w-5" />
-                  Enviar Email
+                  {isSendingEmail ? (
+                    <>
+                      <span className="animate-spin">⏳</span>
+                      <span>Enviando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <EnvelopeIcon className="h-5 w-5" />
+                      Enviar Confirmación al Cliente
+                    </>
+                  )}
                 </button>
+                <a
+                  href={(() => {
+                    // Obtener el número de teléfono del cliente
+                    const phone = selectedOrder.customer.phone || ''
+                    
+                    // Limpiar el número: remover espacios, guiones, paréntesis, etc.
+                    let cleanPhone = phone.replace(/[^0-9+]/g, '')
+                    
+                    // Si el número empieza con +54, mantenerlo (formato internacional de Argentina)
+                    // Si empieza con 54, agregar el +
+                    if (cleanPhone.startsWith('54') && !cleanPhone.startsWith('+54')) {
+                      cleanPhone = '+' + cleanPhone
+                    } else if (!cleanPhone.startsWith('+') && cleanPhone.length > 0) {
+                      // Si no tiene código de país y es un número argentino, agregar +54
+                      // Números argentinos suelen tener 10-11 dígitos (sin código de país)
+                      if (cleanPhone.length >= 10 && cleanPhone.length <= 11) {
+                        // Si empieza con 9, es un número con código de área
+                        if (cleanPhone.startsWith('9')) {
+                          cleanPhone = '+54' + cleanPhone
+                        } else if (cleanPhone.startsWith('0')) {
+                          // Si empieza con 0, removerlo y agregar +54
+                          cleanPhone = '+54' + cleanPhone.substring(1)
+                        } else {
+                          // Agregar +54 al inicio
+                          cleanPhone = '+54' + cleanPhone
+                        }
+                      } else if (cleanPhone.length < 10) {
+                        // Número muy corto, intentar agregar código de país
+                        cleanPhone = '+54' + cleanPhone
+                      }
+                    }
+                    
+                    // Si después de todo no tiene +, agregarlo
+                    if (cleanPhone && !cleanPhone.startsWith('+')) {
+                      cleanPhone = '+54' + cleanPhone
+                    }
+                    
+                    // Crear el mensaje prellenado
+                    const message = `Hola ${selectedOrder.customer.firstName}, te contactamos desde Gia Electro sobre tu pedido #${selectedOrder.id}`
+                    
+                    // Construir la URL de WhatsApp
+                    return `https://wa.me/${cleanPhone.replace('+', '')}?text=${encodeURIComponent(message)}`
+                  })()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  onClick={(e) => {
+                    // Verificar que hay un número de teléfono
+                    if (!selectedOrder.customer.phone || selectedOrder.customer.phone.trim() === '') {
+                      e.preventDefault()
+                      alert('El cliente no tiene un número de teléfono registrado')
+                    }
+                  }}
+                >
+                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                  </svg>
+                  Contactar por WhatsApp
+                </a>
                 <button
                   onClick={() => window.print()}
                   className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
@@ -491,6 +708,447 @@ function AdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* Modal para Agregar Pedido Manualmente desde Gmail */}
+      {showAddOrderModal && (
+        <AddOrderFromEmailModal
+          isOpen={showAddOrderModal}
+          onClose={() => setShowAddOrderModal(false)}
+          onOrderAdded={() => {
+            setShowAddOrderModal(false)
+            loadOrders() // Recargar la lista de pedidos
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// Componente Modal para agregar pedido desde email
+function AddOrderFromEmailModal({ isOpen, onClose, onOrderAdded }) {
+  const [emailContent, setEmailContent] = useState('')
+  const [parsedData, setParsedData] = useState(null)
+  const [manualForm, setManualForm] = useState({
+    customerName: '',
+    customerEmail: '',
+    customerPhone: '',
+    address: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: 'Argentina',
+    items: [{ name: '', quantity: 1, price: 0 }],
+    total: 0,
+  })
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [error, setError] = useState('')
+
+  const parseEmailContent = () => {
+    try {
+      // Intentar extraer información del email
+      const lines = emailContent.split('\n').map(l => l.trim()).filter(l => l)
+      
+      // Buscar ID de pedido
+      const orderIdMatch = emailContent.match(/ID de Pedido:\s*([A-Z0-9-]+)/i) || 
+                          emailContent.match(/Pedido[#\s]*([A-Z0-9-]+)/i)
+      const orderId = orderIdMatch ? orderIdMatch[1] : `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+
+      // Buscar nombre del cliente
+      const nameMatch = emailContent.match(/Nombre:\s*([^\n]+)/i)
+      const customerName = nameMatch ? nameMatch[1].trim() : ''
+
+      // Buscar email
+      const emailMatch = emailContent.match(/Email:\s*([^\s@]+@[^\s@]+\.[^\s@]+)/i)
+      const customerEmail = emailMatch ? emailMatch[1].trim() : ''
+
+      // Buscar teléfono
+      const phoneMatch = emailContent.match(/Teléfono:\s*([^\n]+)/i)
+      const customerPhone = phoneMatch ? phoneMatch[1].trim() : ''
+
+      // Buscar dirección
+      const addressMatch = emailContent.match(/Dirección:\s*([^\n]+)/i)
+      const address = addressMatch ? addressMatch[1].trim() : ''
+
+      // Buscar ciudad
+      const cityMatch = emailContent.match(/Ciudad:\s*([^\n]+)/i)
+      const city = cityMatch ? cityMatch[1].trim() : ''
+
+      // Buscar estado
+      const stateMatch = emailContent.match(/Estado[\/\s]*Provincia:\s*([^\n]+)/i)
+      const state = stateMatch ? stateMatch[1].trim() : ''
+
+      // Buscar código postal
+      const zipMatch = emailContent.match(/Código Postal:\s*([^\n]+)/i)
+      const zipCode = zipMatch ? zipMatch[1].trim() : ''
+
+      // Buscar total
+      const totalMatch = emailContent.match(/Total:\s*\$?([\d.,]+)/i)
+      const total = totalMatch ? parseFloat(totalMatch[1].replace(/[.,]/g, '')) : 0
+
+      // Buscar productos (formato: número. nombre - Cantidad: X - Precio: $Y)
+      const items = []
+      const itemMatches = emailContent.matchAll(/\d+\.\s*([^-]+?)\s*-\s*Cantidad:\s*(\d+)\s*-\s*Precio[^\$]*\$?([\d.,]+)/gi)
+      for (const match of itemMatches) {
+        items.push({
+          name: match[1].trim(),
+          quantity: parseInt(match[2]) || 1,
+          price: parseFloat(match[3].replace(/[.,]/g, '')) || 0,
+        })
+      }
+
+      // Si no se encontraron items con el patrón, intentar otro formato
+      if (items.length === 0) {
+        // Buscar líneas que parezcan productos
+        const productLines = lines.filter(l => 
+          l.match(/^\d+\./) || 
+          (l.includes('Cantidad') && l.includes('Precio'))
+        )
+        // Intentar parsear manualmente
+      }
+
+      const [firstName, ...lastNameParts] = customerName.split(' ')
+      const lastName = lastNameParts.join(' ') || ''
+
+      setParsedData({
+        orderId,
+        customer: {
+          firstName: firstName || '',
+          lastName: lastName || '',
+          email: customerEmail,
+          phone: customerPhone,
+        },
+        shipping: {
+          address,
+          city,
+          state,
+          zipCode,
+          country: 'Argentina',
+        },
+        items: items.length > 0 ? items : [{ name: 'Producto', quantity: 1, price: total }],
+        total,
+      })
+
+      // Actualizar formulario manual
+      setManualForm({
+        customerName,
+        customerEmail,
+        customerPhone,
+        address,
+        city,
+        state,
+        zipCode,
+        country: 'Argentina',
+        items: items.length > 0 ? items : [{ name: 'Producto', quantity: 1, price: total }],
+        total,
+      })
+    } catch (err) {
+      console.error('Error parseando email:', err)
+      setError('Error al parsear el email. Por favor, completa el formulario manualmente.')
+    }
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setIsProcessing(true)
+    setError('')
+
+    try {
+      const orderId = parsedData?.orderId || `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+      
+      const [firstName, ...lastNameParts] = manualForm.customerName.split(' ')
+      const lastName = lastNameParts.join(' ') || ''
+
+      const orderData = {
+        id: orderId,
+        customer_data: {
+          firstName: firstName || manualForm.customerName,
+          lastName: lastName,
+          email: manualForm.customerEmail,
+          phone: manualForm.customerPhone,
+        },
+        shipping_data: {
+          address: manualForm.address,
+          city: manualForm.city,
+          state: manualForm.state,
+          zipCode: manualForm.zipCode,
+          country: manualForm.country,
+        },
+        items: manualForm.items.filter(item => item.name && item.quantity > 0),
+        total: manualForm.total || manualForm.items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+        status: 'pending',
+        payment_status: 'pending',
+        payment_data: {
+          payment_method: 'email',
+        },
+        user_id: null,
+      }
+
+      const { error: supabaseError } = await supabaseAdmin
+        .from('orders')
+        .insert([orderData])
+
+      if (supabaseError) throw supabaseError
+
+      onOrderAdded()
+    } catch (err) {
+      console.error('Error guardando pedido:', err)
+      setError('Error al guardar el pedido: ' + err.message)
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-primary-black">
+            Agregar Pedido desde Gmail
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <XCircleIcon className="h-6 w-6" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Paso 1: Pegar contenido del email */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Paso 1: Pega el contenido del email de Gmail aquí
+            </label>
+            <textarea
+              value={emailContent}
+              onChange={(e) => setEmailContent(e.target.value)}
+              onBlur={parseEmailContent}
+              className="w-full px-4 py-3 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow min-h-[200px] font-mono text-sm"
+              placeholder="Pega aquí el contenido completo del email que recibiste en Gmail..."
+            />
+            <button
+              type="button"
+              onClick={parseEmailContent}
+              className="mt-2 px-4 py-2 bg-primary-yellow text-primary-black rounded-lg hover:bg-yellow-500 transition-colors font-semibold"
+            >
+              Extraer Información
+            </button>
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-red-600 text-sm">{error}</p>
+            </div>
+          )}
+
+          {/* Paso 2: Formulario manual */}
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-bold text-primary-black mb-4">
+              Paso 2: Verifica y completa la información
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nombre Completo *
+                </label>
+                <input
+                  type="text"
+                  value={manualForm.customerName}
+                  onChange={(e) => setManualForm({ ...manualForm, customerName: e.target.value })}
+                  className="w-full px-4 py-3 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  value={manualForm.customerEmail}
+                  onChange={(e) => setManualForm({ ...manualForm, customerEmail: e.target.value })}
+                  className="w-full px-4 py-3 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Teléfono *
+                </label>
+                <input
+                  type="tel"
+                  value={manualForm.customerPhone}
+                  onChange={(e) => setManualForm({ ...manualForm, customerPhone: e.target.value })}
+                  className="w-full px-4 py-3 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Dirección *
+                </label>
+                <input
+                  type="text"
+                  value={manualForm.address}
+                  onChange={(e) => setManualForm({ ...manualForm, address: e.target.value })}
+                  className="w-full px-4 py-3 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Ciudad *
+                </label>
+                <input
+                  type="text"
+                  value={manualForm.city}
+                  onChange={(e) => setManualForm({ ...manualForm, city: e.target.value })}
+                  className="w-full px-4 py-3 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Estado/Provincia *
+                </label>
+                <input
+                  type="text"
+                  value={manualForm.state}
+                  onChange={(e) => setManualForm({ ...manualForm, state: e.target.value })}
+                  className="w-full px-4 py-3 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Código Postal *
+                </label>
+                <input
+                  type="text"
+                  value={manualForm.zipCode}
+                  onChange={(e) => setManualForm({ ...manualForm, zipCode: e.target.value })}
+                  className="w-full px-4 py-3 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Total *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={manualForm.total}
+                  onChange={(e) => setManualForm({ ...manualForm, total: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-4 py-3 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Productos */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Productos *
+              </label>
+              {manualForm.items.map((item, index) => (
+                <div key={index} className="flex gap-2 mb-2">
+                  <input
+                    type="text"
+                    placeholder="Nombre del producto"
+                    value={item.name}
+                    onChange={(e) => {
+                      const newItems = [...manualForm.items]
+                      newItems[index].name = e.target.value
+                      setManualForm({ ...manualForm, items: newItems })
+                    }}
+                    className="flex-1 px-4 py-2 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                    required
+                  />
+                  <input
+                    type="number"
+                    placeholder="Cantidad"
+                    value={item.quantity}
+                    onChange={(e) => {
+                      const newItems = [...manualForm.items]
+                      newItems[index].quantity = parseInt(e.target.value) || 1
+                      setManualForm({ ...manualForm, items: newItems })
+                    }}
+                    className="w-24 px-4 py-2 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                    min="1"
+                    required
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="Precio"
+                    value={item.price}
+                    onChange={(e) => {
+                      const newItems = [...manualForm.items]
+                      newItems[index].price = parseFloat(e.target.value) || 0
+                      setManualForm({ ...manualForm, items: newItems })
+                    }}
+                    className="w-32 px-4 py-2 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                    required
+                  />
+                  {manualForm.items.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newItems = manualForm.items.filter((_, i) => i !== index)
+                        setManualForm({ ...manualForm, items: newItems })
+                      }}
+                      className="px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setManualForm({
+                    ...manualForm,
+                    items: [...manualForm.items, { name: '', quantity: 1, price: 0 }]
+                  })
+                }}
+                className="mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+              >
+                + Agregar Producto
+              </button>
+            </div>
+          </div>
+
+          <div className="flex gap-4 pt-4 border-t">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-semibold"
+              disabled={isProcessing}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={isProcessing}
+              className="flex-1 btn-primary px-6 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isProcessing ? 'Guardando...' : 'Guardar Pedido'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }

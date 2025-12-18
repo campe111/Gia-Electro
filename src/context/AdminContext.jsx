@@ -25,14 +25,14 @@ export const AdminProvider = ({ children }) => {
   }, [])
 
   const login = (email, password) => {
-    // Credenciales por defecto (en producción usar backend seguro)
-    const ADMIN_EMAIL = 'admin@giaelectro.com'
-    const ADMIN_PASSWORD = 'admin123'
+    // Credenciales de administración
+    const ADMIN_EMAIL = 'giaelectro32@gmail.com'
+    const ADMIN_PASSWORD = 'Electrogiacolonia'
 
     if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
       const admin = {
         email: ADMIN_EMAIL,
-        name: 'Administrador',
+        name: 'Administrador Gia Electro',
         role: 'admin',
       }
       setIsAuthenticated(true)

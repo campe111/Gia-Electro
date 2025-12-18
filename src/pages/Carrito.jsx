@@ -1,12 +1,17 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
+import { supabase } from '../config/supabase'
+import { sendOrderEmail } from '../services/emailService'
 import {
   TrashIcon,
   PlusIcon,
   MinusIcon,
   ShoppingBagIcon,
   ArrowRightIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline'
+import { getPlaceholderImage } from '../utils/imageHelper'
 
 function Carrito() {
   const navigate = useNavigate()
@@ -21,9 +26,151 @@ function Carrito() {
 
   const totalPrice = getTotalPrice()
   const totalItems = getTotalItems()
+  const [showModal, setShowModal] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    address: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: 'Argentina',
+  })
+  const [errors, setErrors] = useState({})
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }))
+    // Limpiar error del campo
+    if (errors[name]) {
+      setErrors((prev) => ({
+        ...prev,
+        [name]: '',
+      }))
+    }
+  }
+
+  const validateForm = () => {
+    const newErrors = {}
+    
+    if (!formData.firstName.trim()) {
+      newErrors.firstName = 'El nombre es requerido'
+    }
+    if (!formData.lastName.trim()) {
+      newErrors.lastName = 'El apellido es requerido'
+    }
+    if (!formData.email.trim()) {
+      newErrors.email = 'El email es requerido'
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = 'Email inválido'
+    }
+    if (!formData.phone.trim()) {
+      newErrors.phone = 'El teléfono es requerido'
+    }
+    if (!formData.address.trim()) {
+      newErrors.address = 'La dirección es requerida'
+    }
+    if (!formData.city.trim()) {
+      newErrors.city = 'La ciudad es requerida'
+    }
+    if (!formData.state.trim()) {
+      newErrors.state = 'El estado/provincia es requerido'
+    }
+    if (!formData.zipCode.trim()) {
+      newErrors.zipCode = 'El código postal es requerido'
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleSubmitOrder = async (e) => {
+    e.preventDefault()
+    
+    if (!validateForm()) {
+      return
+    }
+
+    setIsProcessing(true)
+
+    try {
+      // Generar ID de orden único
+      const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+
+      // Crear objeto de orden
+      const order = {
+        id: orderId,
+        customer: {
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+          email: formData.email.trim(),
+          phone: formData.phone.trim(),
+        },
+        shipping: {
+          address: formData.address.trim(),
+          city: formData.city.trim(),
+          state: formData.state.trim(),
+          zipCode: formData.zipCode.trim(),
+          country: formData.country.trim(),
+        },
+        items: cartItems,
+        total: totalPrice,
+        paymentMethod: 'email', // Indicar que el pago se procesará por email
+        date: new Date().toISOString(),
+        status: 'pending',
+      }
+
+      // Guardar orden en Supabase
+      const { error: supabaseError } = await supabase
+        .from('orders')
+        .insert([
+          {
+            id: orderId,
+            customer_data: order.customer,
+            shipping_data: order.shipping,
+            items: cartItems,
+            total: totalPrice,
+            status: 'pending',
+            payment_status: 'pending',
+            payment_data: {
+              payment_method: 'email',
+            },
+            user_id: (await supabase.auth.getUser()).data.user?.id || null
+          }
+        ])
+
+      if (supabaseError) throw supabaseError
+
+      // Enviar email con los detalles del pedido a Gia Electro
+      try {
+        await sendOrderEmail(order)
+        console.log('Email de pedido enviado exitosamente')
+      } catch (emailError) {
+        // No bloquear el proceso si el email falla
+        console.error('Error enviando email (no crítico):', emailError)
+      }
+
+      // Limpiar carrito
+      clearCart()
+
+      // Cerrar modal y redirigir a confirmación
+      setShowModal(false)
+      navigate(`/confirmacion/${orderId}`, { state: { order } })
+    } catch (error) {
+      console.error('Error procesando el pedido:', error)
+      setErrors({ submit: 'Error procesando el pedido. Por favor intenta nuevamente.' })
+      setIsProcessing(false)
+    }
+  }
 
   const handleCheckout = () => {
-    navigate('/checkout')
+    setShowModal(true)
   }
 
   if (cartItems.length === 0) {
@@ -91,8 +238,7 @@ function Carrito() {
                       alt={item.name}
                       className="w-full h-full object-cover"
                       onError={(e) => {
-                        e.target.src =
-                          'https://via.placeholder.com/300x200?text=Imagen+No+Disponible'
+                        e.target.src = getPlaceholderImage(300, 200, 'Imagen no disponible')
                       }}
                     />
                   </div>
@@ -195,7 +341,7 @@ function Carrito() {
                   onClick={handleCheckout}
                   className="btn-primary w-full mb-4 flex items-center justify-center space-x-2"
                 >
-                  <span>Proceder al Pago</span>
+                  <span>Continuar con el Pedido</span>
                   <ArrowRightIcon className="h-5 w-5" />
                 </button>
 
@@ -210,6 +356,248 @@ function Carrito() {
           </div>
         </div>
       </div>
+
+      {/* Modal de Formulario de Pedido */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-primary-black">
+                Información de Contacto y Envío
+              </h2>
+              <button
+                onClick={() => setShowModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+                aria-label="Cerrar"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitOrder} className="p-6 space-y-4">
+              <p className="text-gray-600 mb-4">
+                Completa tus datos y te contactaremos por email para coordinar el pago y envío.
+              </p>
+
+              {/* Información Personal */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-2">
+                    Nombre *
+                  </label>
+                  <input
+                    type="text"
+                    id="firstName"
+                    name="firstName"
+                    value={formData.firstName}
+                    onChange={handleInputChange}
+                    className={`w-full px-4 py-3 bg-white rounded-lg border ${
+                      errors.firstName ? 'border-red-500' : 'border-gray-300'
+                    } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                    required
+                  />
+                  {errors.firstName && (
+                    <p className="text-red-500 text-sm mt-1">{errors.firstName}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-2">
+                    Apellido *
+                  </label>
+                  <input
+                    type="text"
+                    id="lastName"
+                    name="lastName"
+                    value={formData.lastName}
+                    onChange={handleInputChange}
+                    className={`w-full px-4 py-3 bg-white rounded-lg border ${
+                      errors.lastName ? 'border-red-500' : 'border-gray-300'
+                    } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                    required
+                  />
+                  {errors.lastName && (
+                    <p className="text-red-500 text-sm mt-1">{errors.lastName}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                    Email *
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    className={`w-full px-4 py-3 bg-white rounded-lg border ${
+                      errors.email ? 'border-red-500' : 'border-gray-300'
+                    } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                    required
+                  />
+                  {errors.email && (
+                    <p className="text-red-500 text-sm mt-1">{errors.email}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
+                    Teléfono *
+                  </label>
+                  <input
+                    type="tel"
+                    id="phone"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    className={`w-full px-4 py-3 bg-white rounded-lg border ${
+                      errors.phone ? 'border-red-500' : 'border-gray-300'
+                    } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                    required
+                  />
+                  {errors.phone && (
+                    <p className="text-red-500 text-sm mt-1">{errors.phone}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Dirección de Envío */}
+              <div>
+                <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-2">
+                  Dirección *
+                </label>
+                <input
+                  type="text"
+                  id="address"
+                  name="address"
+                  value={formData.address}
+                  onChange={handleInputChange}
+                  className={`w-full px-4 py-3 bg-white rounded-lg border ${
+                    errors.address ? 'border-red-500' : 'border-gray-300'
+                  } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                  required
+                />
+                {errors.address && (
+                  <p className="text-red-500 text-sm mt-1">{errors.address}</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-2">
+                    Ciudad *
+                  </label>
+                  <input
+                    type="text"
+                    id="city"
+                    name="city"
+                    value={formData.city}
+                    onChange={handleInputChange}
+                    className={`w-full px-4 py-3 bg-white rounded-lg border ${
+                      errors.city ? 'border-red-500' : 'border-gray-300'
+                    } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                    required
+                  />
+                  {errors.city && (
+                    <p className="text-red-500 text-sm mt-1">{errors.city}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="state" className="block text-sm font-medium text-gray-700 mb-2">
+                    Estado/Provincia *
+                  </label>
+                  <input
+                    type="text"
+                    id="state"
+                    name="state"
+                    value={formData.state}
+                    onChange={handleInputChange}
+                    className={`w-full px-4 py-3 bg-white rounded-lg border ${
+                      errors.state ? 'border-red-500' : 'border-gray-300'
+                    } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                    required
+                  />
+                  {errors.state && (
+                    <p className="text-red-500 text-sm mt-1">{errors.state}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="zipCode" className="block text-sm font-medium text-gray-700 mb-2">
+                    Código Postal *
+                  </label>
+                  <input
+                    type="text"
+                    id="zipCode"
+                    name="zipCode"
+                    value={formData.zipCode}
+                    onChange={handleInputChange}
+                    className={`w-full px-4 py-3 bg-white rounded-lg border ${
+                      errors.zipCode ? 'border-red-500' : 'border-gray-300'
+                    } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                    required
+                  />
+                  {errors.zipCode && (
+                    <p className="text-red-500 text-sm mt-1">{errors.zipCode}</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="country" className="block text-sm font-medium text-gray-700 mb-2">
+                  País
+                </label>
+                <input
+                  type="text"
+                  id="country"
+                  name="country"
+                  value={formData.country}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-3 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                />
+              </div>
+
+              {errors.submit && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-red-600 text-sm">{errors.submit}</p>
+                </div>
+              )}
+
+              <div className="flex gap-4 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-semibold"
+                  disabled={isProcessing}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isProcessing}
+                  className="flex-1 btn-primary px-6 py-3 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isProcessing ? (
+                    <>
+                      <span className="animate-spin">⏳</span>
+                      <span>Procesando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Enviar Pedido</span>
+                      <ArrowRightIcon className="h-5 w-5" />
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

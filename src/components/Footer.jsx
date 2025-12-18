@@ -62,17 +62,35 @@ function Footer() {
             <ul className="space-y-3">
               <li className="flex items-start space-x-2">
                 <MapPinIcon className="h-5 w-5 text-primary-red flex-shrink-0 mt-0.5" />
-                <span className="text-sm">
-                  Dirección de la tienda, Ciudad, País
-                </span>
+                <div className="text-sm">
+                  <div>Santa Maria 1062, Colonia Hinojo, Buenos Aires, Argentina 7318</div>
+                  <a
+                    href="https://www.google.com/maps?q=-36.8771999,-60.1788982"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary-yellow hover:text-yellow-400 transition-colors text-xs mt-1 block"
+                  >
+                    Ver en Google Maps
+                  </a>
+                </div>
               </li>
               <li className="flex items-center space-x-2">
                 <PhoneIcon className="h-5 w-5 text-primary-red flex-shrink-0" />
-                <span className="text-sm">+1 (234) 567-8900</span>
+                <a
+                  href="tel:+5492284236341"
+                  className="text-sm hover:text-primary-yellow transition-colors"
+                >
+                  +54 9 2284 23-6341
+                </a>
               </li>
               <li className="flex items-center space-x-2">
                 <EnvelopeIcon className="h-5 w-5 text-primary-red flex-shrink-0" />
-                <span className="text-sm">info@giaelectro.com</span>
+                <a
+                  href="mailto:giaelectro32@gmail.com"
+                  className="text-sm hover:text-primary-yellow transition-colors"
+                >
+                  giaelectro32@gmail.com
+                </a>
               </li>
             </ul>
           </div>

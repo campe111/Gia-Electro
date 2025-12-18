@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Bars3Icon, XMarkIcon, UserIcon, ArrowRightOnRectangleIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import { Bars3Icon, XMarkIcon, UserIcon, ArrowRightOnRectangleIcon, MagnifyingGlassIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 import CartIcon from './CartIcon'
 import AuthModal from './AuthModal'
 import { useUser } from '../context/UserContext'
@@ -10,10 +10,12 @@ function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+  const [isCategoriesMenuOpen, setIsCategoriesMenuOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
   const { isAuthenticated, user, logout } = useUser()
   const userMenuRef = useRef(null)
+  const categoriesMenuRef = useRef(null)
 
   const isActive = (path) => location.pathname === path
 
@@ -29,16 +31,33 @@ function Header() {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
         setIsUserMenuOpen(false)
       }
+      if (categoriesMenuRef.current && !categoriesMenuRef.current.contains(event.target)) {
+        setIsCategoriesMenuOpen(false)
+      }
     }
 
-    if (isUserMenuOpen) {
+    if (isUserMenuOpen || isCategoriesMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside)
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [isUserMenuOpen])
+  }, [isUserMenuOpen, isCategoriesMenuOpen])
+
+  const categories = [
+    { id: 'todos', label: 'Todos', path: '/catalogo' },
+    { id: 'heladeras', label: 'Heladeras', path: '/catalogo?categoria=heladeras' },
+    { id: 'cocinas', label: 'Cocinas', path: '/catalogo?categoria=cocinas' },
+    { id: 'microondas', label: 'Microondas', path: '/catalogo?categoria=microondas' },
+    { id: 'freezer', label: 'Freezer', path: '/catalogo?categoria=freezer' },
+    { id: 'lavarropas', label: 'Lavarropas', path: '/catalogo?categoria=lavarropas' },
+  ]
+
+  const handleCategoryClick = (path) => {
+    navigate(path)
+    setIsCategoriesMenuOpen(false)
+  }
 
   const navLinks = [
     { path: '/', label: 'Inicio' },
@@ -174,19 +193,51 @@ function Header() {
         {/* Navegación principal desktop (segunda fila) */}
         <div className="hidden md:flex items-center justify-center py-2 border-t border-gray-200 text-sm">
           <nav className="flex items-center gap-8">
-            {navLinks.map((link) => (
-              <Link
-                key={link.path}
-                to={link.path}
-                className={`pb-1 border-b-2 transition-colors inline-flex items-center gap-1 pl-2 first:pl-0 ${
-                  isActive(link.path)
-                    ? 'border-primary-red text-primary-red font-semibold'
-                    : 'border-transparent text-gray-800 hover:text-primary-red hover:border-primary-red'
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
+            {navLinks.map((link) => {
+              if (link.path === '/categorias') {
+                return (
+                  <div key={link.path} className="relative" ref={categoriesMenuRef}>
+                    <button
+                      onClick={() => setIsCategoriesMenuOpen(!isCategoriesMenuOpen)}
+                      className={`pb-1 border-b-2 transition-colors inline-flex items-center gap-1 pl-2 first:pl-0 ${
+                        isActive(link.path) || isCategoriesMenuOpen
+                          ? 'border-primary-red text-primary-red font-semibold'
+                          : 'border-transparent text-gray-800 hover:text-primary-red hover:border-primary-red'
+                      }`}
+                    >
+                      {link.label}
+                      <ChevronDownIcon className={`h-4 w-4 transition-transform ${isCategoriesMenuOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {isCategoriesMenuOpen && (
+                      <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-2xl z-[9999] border border-gray-200 overflow-hidden">
+                        {categories.map((category) => (
+                          <button
+                            key={category.id}
+                            onClick={() => handleCategoryClick(category.path)}
+                            className="w-full text-left px-4 py-2.5 text-sm text-gray-800 hover:bg-primary-red hover:text-white transition-colors border-b border-gray-100 last:border-b-0"
+                          >
+                            {category.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+              return (
+                <Link
+                  key={link.path}
+                  to={link.path}
+                  className={`pb-1 border-b-2 transition-colors inline-flex items-center gap-1 pl-2 first:pl-0 ${
+                    isActive(link.path)
+                      ? 'border-primary-red text-primary-red font-semibold'
+                      : 'border-transparent text-gray-800 hover:text-primary-red hover:border-primary-red'
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              )
+            })}
           </nav>
           <div className="ml-4">
             <CartIcon />
@@ -197,20 +248,56 @@ function Header() {
         {isMenuOpen && (
           <nav className="md:hidden pb-4 border-t border-gray-200 mt-2">
             <div className="flex flex-col space-y-2 pt-2">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.path}
-                  to={link.path}
-                  onClick={() => setIsMenuOpen(false)}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors shadow-sm ${
-                    isActive(link.path)
-                      ? 'bg-primary-red text-white'
-                      : 'text-gray-800 hover:text-primary-red bg-white hover:bg-red-50 border border-gray-200'
-                  }`}
-                >
-                  {link.label}
-                </Link>
-              ))}
+              {navLinks.map((link) => {
+                if (link.path === '/categorias') {
+                  return (
+                    <div key={link.path}>
+                      <button
+                        onClick={() => setIsCategoriesMenuOpen(!isCategoriesMenuOpen)}
+                        className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors shadow-sm flex items-center justify-between ${
+                          isActive(link.path) || isCategoriesMenuOpen
+                            ? 'bg-primary-red text-white'
+                            : 'text-gray-800 hover:text-primary-red bg-white hover:bg-red-50 border border-gray-200'
+                        }`}
+                      >
+                        <span>{link.label}</span>
+                        <ChevronDownIcon className={`h-4 w-4 transition-transform ${isCategoriesMenuOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      {isCategoriesMenuOpen && (
+                        <div className="mt-1 ml-4 space-y-1">
+                          {categories.map((category) => (
+                            <Link
+                              key={category.id}
+                              to={category.path}
+                              onClick={() => {
+                                setIsMenuOpen(false)
+                                setIsCategoriesMenuOpen(false)
+                              }}
+                              className="block px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-primary-red hover:text-white transition-colors bg-gray-50"
+                            >
+                              {category.label}
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                }
+                return (
+                  <Link
+                    key={link.path}
+                    to={link.path}
+                    onClick={() => setIsMenuOpen(false)}
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors shadow-sm ${
+                      isActive(link.path)
+                        ? 'bg-primary-red text-white'
+                        : 'text-gray-800 hover:text-primary-red bg-white hover:bg-red-50 border border-gray-200'
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                )
+              })}
               <Link
                 to="/carrito"
                 onClick={() => setIsMenuOpen(false)}

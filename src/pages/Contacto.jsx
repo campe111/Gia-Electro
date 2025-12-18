@@ -59,9 +59,17 @@ function Contacto() {
                     <h3 className="font-semibold text-primary-black mb-1">
                       Dirección
                     </h3>
-                    <p className="text-gray-600">
-                      Dirección de la tienda, Ciudad, País
+                    <p className="text-gray-600 mb-2">
+                      Santa Maria 1062, Colonia Hinojo, Buenos Aires, Argentina 7318
                     </p>
+                    <a
+                      href="https://www.google.com/maps?q=-36.8771999,-60.1788982"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary-red hover:text-primary-yellow transition-colors text-sm font-medium"
+                    >
+                      Ver en Google Maps →
+                    </a>
                   </div>
                 </div>
 
@@ -73,7 +81,12 @@ function Contacto() {
                     <h3 className="font-semibold text-primary-black mb-1">
                       Teléfono
                     </h3>
-                    <p className="text-gray-600">+1 (234) 567-8900</p>
+                    <a
+                      href="tel:+5492284236341"
+                      className="text-gray-600 hover:text-primary-red transition-colors"
+                    >
+                      +54 9 2284 23-6341
+                    </a>
                   </div>
                 </div>
 
@@ -85,7 +98,12 @@ function Contacto() {
                     <h3 className="font-semibold text-primary-black mb-1">
                       Email
                     </h3>
-                    <p className="text-gray-600">info@giaelectro.com</p>
+                    <a
+                      href="mailto:giaelectro32@gmail.com"
+                      className="text-gray-600 hover:text-primary-red transition-colors"
+                    >
+                      giaelectro32@gmail.com
+                    </a>
                   </div>
                 </div>
 
@@ -205,7 +223,7 @@ function Contacto() {
           </h2>
           <div className="rounded-lg overflow-hidden shadow-lg bg-gray-200">
             <iframe
-              src={`https://www.google.com/maps?q=-36.876725,-60.179608&hl=es&z=15&output=embed`}
+              src={`https://www.google.com/maps?q=-36.8771999,-60.1788982&hl=es&z=15&output=embed`}
               width="100%"
               height="450"
               style={{ border: 0 }}
@@ -216,7 +234,7 @@ function Contacto() {
             ></iframe>
             <div className="mt-4 text-center">
               <a
-                href="https://maps.app.goo.gl/fUeZxUeq181Nx3hz6"
+                href="https://www.google.com/maps?q=-36.8771999,-60.1788982"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-primary-red hover:text-primary-yellow transition-colors font-medium"

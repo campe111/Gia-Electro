@@ -194,7 +194,12 @@ function Confirmacion() {
                 </span>
               </div>
               <p className="text-sm text-gray-600 mt-2">
-                Método de pago: {order.paymentMethod === 'credit' ? 'Tarjeta de Crédito' : 'Tarjeta de Débito'}
+                Método de pago: {
+                  order.paymentMethod === 'credit' ? 'Tarjeta de Crédito' :
+                  order.paymentMethod === 'debit' ? 'Tarjeta de Débito' :
+                  order.paymentMethod === 'email' ? 'Pago por Email (Te contactaremos)' :
+                  'Transferencia Bancaria'
+                }
               </p>
             </div>
           </div>
@@ -209,6 +214,11 @@ function Confirmacion() {
                 Recibirás un email de confirmación en{' '}
                 <strong>{order.customer.email}</strong>
               </li>
+              {order.paymentMethod === 'email' && (
+                <li>
+                  <strong>Te contactaremos por email</strong> para coordinar el método de pago y envío
+                </li>
+              )}
               <li>
                 Te contactaremos cuando tu pedido esté siendo preparado
               </li>

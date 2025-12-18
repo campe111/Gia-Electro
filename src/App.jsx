@@ -11,7 +11,6 @@ import Contacto from './pages/Contacto'
 import Carrito from './pages/Carrito'
 import Checkout from './pages/Checkout'
 import Confirmacion from './pages/Confirmacion'
-import ConfirmacionPago from './pages/ConfirmacionPago'
 import AdminLogin from './pages/AdminLogin'
 import AdminDashboard from './pages/AdminDashboard'
 import AuthCallback from './pages/AuthCallback'
@@ -36,18 +35,6 @@ function App() {
                     <Route
                       path="/confirmacion/:orderId"
                       element={<Confirmacion />}
-                    />
-                    <Route
-                      path="/confirmacion-pago"
-                      element={<ConfirmacionPago />}
-                    />
-                    <Route
-                      path="/pago-fallido"
-                      element={<ConfirmacionPago />}
-                    />
-                    <Route
-                      path="/pago-pendiente"
-                      element={<ConfirmacionPago />}
                     />
                   </Routes>
                   <Analytics />

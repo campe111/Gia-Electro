@@ -1,21 +1,42 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRightIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
-import { products } from '../data/products'
+import { useProducts } from '../hooks/useProducts'
 import logoGia from '../../logo-gia.png'
+import { getPlaceholderImage } from '../utils/imageHelper'
 
 // Constantes de configuración del carrusel
 const CAROUSEL_CONFIG = {
   MAX_ANGLE: 35,
-  HORIZONTAL_OFFSET: 220,
   Z_DEPTH: 200,
-  SCALES: [1, 0.88, 0.75, 0.62, 0.5],
+  // Escalas: [centro, ±1, ±2, ±3] - 1 central + 3 a cada lado
+  SCALES: [1, 0.88, 0.75, 0.62],
+  MAX_VISIBLE_CARDS: 3, // Máximo de tarjetas visibles a cada lado
   TRANSITION_DURATION: 700,
 }
 
 function Hero() {
+  const products = useProducts()
   const [currentIndex, setCurrentIndex] = useState(0)
-  const featuredProducts = products.slice(0, 6)
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024)
+  // Mostrar más productos para tener suficiente contenido
+  const featuredProducts = products.slice(0, Math.max(7, products.length))
+
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  // Calcular offset horizontal responsivo - ajustado para 3 tarjetas a cada lado
+  const getHorizontalOffset = () => {
+    if (windowWidth < 640) return 130 // sm
+    if (windowWidth < 768) return 150 // md
+    if (windowWidth < 1024) return 170 // lg
+    return 190 // xl
+  }
 
   const navigate = (direction) => {
     setCurrentIndex((prev) => {
@@ -36,16 +57,27 @@ function Hero() {
     const totalCards = featuredProducts.length
     const position = normalizePosition(index - currentIndex, totalCards)
     const absPosition = Math.abs(position)
+    const horizontalOffset = getHorizontalOffset()
+    
+    // Ocultar tarjetas más allá de ±3
+    if (absPosition > CAROUSEL_CONFIG.MAX_VISIBLE_CARDS) {
+      return {
+        opacity: 0,
+        pointerEvents: 'none',
+        transform: 'scale(0)',
+        zIndex: -1,
+      }
+    }
     
     const angle = position * (CAROUSEL_CONFIG.MAX_ANGLE / 2.5)
-    const horizontalOffset = position * CAROUSEL_CONFIG.HORIZONTAL_OFFSET
+    const offset = position * horizontalOffset
     const zOffset = -absPosition * CAROUSEL_CONFIG.Z_DEPTH
     const scale = CAROUSEL_CONFIG.SCALES[absPosition] ?? CAROUSEL_CONFIG.SCALES.at(-1)
     
     return {
-      transform: `translateX(${horizontalOffset}px) translateZ(${zOffset}px) rotateY(${angle}deg) scale(${scale})`,
+      transform: `translateX(${offset}px) translateZ(${zOffset}px) rotateY(${angle}deg) scale(${scale})`,
       opacity: 1,
-      zIndex: totalCards - absPosition,
+      zIndex: CAROUSEL_CONFIG.MAX_VISIBLE_CARDS + 1 - absPosition,
     }
   }
 
@@ -58,45 +90,45 @@ function Hero() {
       }}
     >
       {/* Imagen */}
-      <div className="relative w-full h-[240px] sm:h-[280px] md:h-[320px] bg-white flex items-center justify-center">
+      <div className="relative w-full h-[140px] sm:h-[160px] md:h-[180px] lg:h-[200px] bg-white flex items-center justify-center">
         <img
           src={product.image}
           alt={product.name}
-          className="w-full h-full object-contain p-3 sm:p-4"
+          className="w-full h-full object-contain p-2 sm:p-3"
           loading="lazy"
           decoding="async"
           onError={(e) => {
-            e.target.src = `https://via.placeholder.com/400x300?text=${encodeURIComponent(product.name)}`
+            e.target.src = getPlaceholderImage(400, 300, product.name)
           }}
         />
         {product.category && (
-          <span className="absolute top-2 left-2 sm:top-4 sm:left-4 bg-primary-red text-white text-xs sm:text-sm font-semibold px-2 py-1 sm:px-4 sm:py-2 rounded-md">
+          <span className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 bg-primary-red text-white text-xs font-semibold px-2 py-1 rounded-md">
             {product.category.charAt(0).toUpperCase() + product.category.slice(1).replace('-', ' ')}
           </span>
         )}
       </div>
       
       {/* Información */}
-      <div className="p-3 sm:p-4 bg-white">
-        <h3 className="text-sm sm:text-base md:text-lg lg:text-xl font-bold text-gray-900 mb-1.5 sm:mb-2 line-clamp-2 min-h-[2rem] sm:min-h-[2.5rem]">
+      <div className="p-2 sm:p-2.5 md:p-3 bg-white">
+        <h3 className="text-xs sm:text-sm md:text-base font-bold text-gray-900 mb-1 line-clamp-2 min-h-[1.5rem] sm:min-h-[1.75rem] md:min-h-[2rem]">
           {product.name}
         </h3>
         {product.description && (
-          <p className="text-xs sm:text-sm md:text-base text-gray-600 mb-2 sm:mb-3 line-clamp-2 sm:line-clamp-3">
+          <p className="text-xs sm:text-sm text-gray-600 mb-1.5 sm:mb-2 line-clamp-2">
             {product.description}
           </p>
         )}
-        <div className="flex flex-col gap-2 sm:gap-3">
-          <span className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-primary-red">
+        <div className="flex flex-col gap-1.5 sm:gap-2">
+          <span className="text-sm sm:text-base md:text-lg lg:text-xl font-bold text-primary-red">
             ${product.price.toLocaleString()}
           </span>
           <Link
             to="/catalogo"
-            className="bg-primary-yellow hover:bg-yellow-500 text-primary-black font-semibold py-2 sm:py-2.5 px-4 sm:px-6 rounded-lg transition-all duration-200 inline-flex items-center justify-center space-x-2 text-sm sm:text-base"
+            className="bg-primary-yellow hover:bg-yellow-500 text-primary-black font-semibold py-1.5 sm:py-2 px-3 sm:px-4 rounded-lg transition-all duration-200 inline-flex items-center justify-center space-x-1.5 text-xs sm:text-sm"
             onClick={(e) => e.stopPropagation()}
           >
             <span>Ver más</span>
-            <ArrowRightIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+            <ArrowRightIcon className="h-3 w-3" />
           </Link>
         </div>
       </div>
@@ -144,9 +176,9 @@ function Hero() {
 
       {/* Carrusel de productos 3D - Fondo negro a todo ancho */}
       {featuredProducts.length > 0 && (
-        <div className="relative w-full bg-black py-6 sm:py-8 md:py-10 overflow-hidden">
+        <div className="relative w-full bg-black py-4 sm:py-5 md:py-6 overflow-hidden">
           <div className="container mx-auto px-4 sm:px-6">
-            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-center mb-10 sm:mb-12 md:mb-16 text-white px-4">
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-center mb-4 sm:mb-6 md:mb-8 text-white px-4">
               Productos <span className="text-primary-yellow">Destacados</span>
             </h2>
             
@@ -170,11 +202,12 @@ function Hero() {
 
                 {/* Contenedor del carrusel cover flow */}
                 <div 
-                  className="relative flex items-center justify-center mx-auto h-[400px] sm:h-[440px] md:h-[480px]"
+                  className="relative flex items-center justify-center mx-auto h-[280px] sm:h-[320px] md:h-[360px] lg:h-[400px]"
                   style={{
                     perspective: '1500px',
                     perspectiveOrigin: 'center center',
                     maxWidth: '100%',
+                    overflow: 'hidden',
                   }}
                 >
                   <div 
@@ -188,12 +221,24 @@ function Hero() {
                     {featuredProducts.map((product, index) => {
                       const cardStyle = getCardStyle(index)
                       const isActive = index === currentIndex
+                      const position = normalizePosition(index - currentIndex, featuredProducts.length)
+                      const absPosition = Math.abs(position)
+                      
+                      // Tamaños responsivos basados en el ancho de la ventana
+                      const getCardWidth = () => {
+                        if (windowWidth < 640) return '200px' // sm
+                        if (windowWidth < 768) return '240px' // md
+                        if (windowWidth < 1024) return '280px' // lg
+                        return '320px' // xl
+                      }
                       
                       return (
                         <div
                           key={product.id}
-                          className="absolute cursor-pointer w-[280px] sm:w-[320px] md:w-[380px] max-w-[90vw] sm:max-w-[85vw]"
+                          className="absolute cursor-pointer"
                           style={{
+                            width: getCardWidth(),
+                            maxWidth: 'calc(100vw - 80px)',
                             ...cardStyle,
                             transition: `all ${CAROUSEL_CONFIG.TRANSITION_DURATION}ms cubic-bezier(0.25, 0.46, 0.45, 0.94)`,
                             willChange: 'transform, opacity',
@@ -208,15 +253,15 @@ function Hero() {
                 </div>
 
                 {/* Indicadores */}
-                <div className="flex justify-center mt-6 sm:mt-8 gap-2">
+                <div className="flex justify-center mt-4 sm:mt-5 gap-2">
                   {featuredProducts.map((_, index) => (
                     <button
                       key={index}
                       onClick={() => setCurrentIndex(index)}
-                      className={`h-2 sm:h-3 rounded-full transition-all duration-300 ${
+                      className={`h-2 sm:h-2.5 rounded-full transition-all duration-300 ${
                         index === currentIndex
-                          ? 'bg-primary-yellow w-6 sm:w-8'
-                          : 'bg-white/30 w-2 sm:w-3 hover:bg-white/50'
+                          ? 'bg-primary-yellow w-5 sm:w-6'
+                          : 'bg-white/30 w-2 sm:w-2.5 hover:bg-white/50'
                       }`}
                       aria-label={`Ir al slide ${index + 1}`}
                     />
