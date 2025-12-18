@@ -1,8 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { products as defaultProducts } from '../data/products'
 
+// Cache en memoria para evitar re-parsear constantemente
+let productsCache = null
+let cacheTimestamp = null
+const CACHE_DURATION = 5 * 60 * 1000 // 5 minutos
+
 export const useProducts = () => {
-  const [products, setProducts] = useState(defaultProducts)
+  const [products, setProducts] = useState(() => {
+    // Usar cache si está disponible y no ha expirado
+    if (productsCache && cacheTimestamp && Date.now() - cacheTimestamp < CACHE_DURATION) {
+      return productsCache
+    }
+    return defaultProducts
+  })
 
   useEffect(() => {
     // Cargar productos desde localStorage si existen (actualizados desde admin)
@@ -12,6 +23,9 @@ export const useProducts = () => {
         if (savedProducts) {
           const parsed = JSON.parse(savedProducts)
           if (Array.isArray(parsed) && parsed.length > 0) {
+            // Actualizar cache
+            productsCache = parsed
+            cacheTimestamp = Date.now()
             setProducts(parsed)
             return
           }
@@ -20,7 +34,11 @@ export const useProducts = () => {
         console.error('Error cargando productos desde localStorage:', error)
       }
       // Si no hay productos guardados, usar los por defecto
-      setProducts(defaultProducts)
+      if (!productsCache) {
+        productsCache = defaultProducts
+        cacheTimestamp = Date.now()
+      }
+      setProducts(productsCache)
     }
 
     loadProducts()
@@ -41,13 +59,18 @@ export const useProducts = () => {
         try {
           const parsed = JSON.parse(savedProducts)
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setProducts(parsed)
+            // Solo actualizar si cambió
+            if (JSON.stringify(parsed) !== JSON.stringify(productsCache)) {
+              productsCache = parsed
+              cacheTimestamp = Date.now()
+              setProducts(parsed)
+            }
           }
         } catch (error) {
           // Ignorar errores de parsing
         }
       }
-    }, 2000) // Verificar cada 2 segundos
+    }, 3000) // Verificar cada 3 segundos (reducido para mejor rendimiento)
 
     return () => {
       window.removeEventListener('storage', handleStorageChange)
@@ -55,6 +78,7 @@ export const useProducts = () => {
     }
   }, [])
 
-  return products
+  // Memoizar productos para evitar re-renders innecesarios
+  return useMemo(() => products, [products])
 }
 

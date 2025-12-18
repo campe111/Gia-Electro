@@ -19,10 +19,26 @@ function Header() {
 
   const isActive = (path) => location.pathname === path
 
-  const handleLogout = () => {
-    logout()
-    setIsUserMenuOpen(false)
-    navigate('/')
+  const handleLogout = async () => {
+    try {
+      setIsUserMenuOpen(false)
+      const result = await logout()
+      
+      if (result?.success !== false) {
+        // Esperar a que Supabase actualice el estado
+        await new Promise(resolve => setTimeout(resolve, 200))
+        // Forzar recarga completa para asegurar que el estado se actualice
+        window.location.href = '/'
+      } else {
+        console.error('Error al cerrar sesión:', result?.error)
+        // Aún así forzar recarga
+        window.location.href = '/'
+      }
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error)
+      // Forzar recarga incluso si hay error
+      window.location.href = '/'
+    }
   }
 
   // Cerrar menú de usuario al hacer clic fuera
@@ -63,10 +79,7 @@ function Header() {
     { path: '/', label: 'Inicio' },
     { path: '/catalogo', label: 'Catálogo' },
     { path: '/categorias', label: 'Categorías' },
-    { path: '/envios', label: 'Envíos' },
     { path: '/favoritos', label: 'Favoritos' },
-    { path: '/ubicacion', label: 'Ubicación' },
-    { path: '/ofertas', label: 'Ofertas' },
     { path: '/contacto', label: 'Contacto' },
   ]
 
@@ -318,9 +331,9 @@ function Header() {
                     <p className="text-xs text-gray-500">{user?.email}</p>
                   </div>
                   <button
-                    onClick={() => {
-                      handleLogout()
+                    onClick={async () => {
                       setIsMenuOpen(false)
+                      await handleLogout()
                     }}
                     className="mt-1 px-3 py-2 rounded-md text-sm font-medium transition-colors shadow-sm text-red-600 hover:bg-red-50 border border-red-200 flex items-center gap-2"
                   >

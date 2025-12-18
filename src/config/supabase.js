@@ -1,8 +1,21 @@
 import { createClient } from '@supabase/supabase-js'
+import { logger } from '../utils/logger'
 
 // Configuración de Supabase desde variables de entorno
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://worpraelmlhsdkvuapbb.supabase.co'
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndvcnByYWVsbWxoc2RrdnVhcGJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1MTM2MjIsImV4cCI6MjA3OTA4OTYyMn0.IeytMhyQfkx18CJcSAeMHqHfgGVkUUxI5NPgE-8S3EU'
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+// Validar que las variables de entorno estén configuradas
+if (!supabaseUrl || !supabaseAnonKey) {
+  const missingVars = []
+  if (!supabaseUrl) missingVars.push('VITE_SUPABASE_URL')
+  if (!supabaseAnonKey) missingVars.push('VITE_SUPABASE_ANON_KEY')
+  
+  throw new Error(
+    `❌ Faltan variables de entorno requeridas: ${missingVars.join(', ')}\n` +
+    `Por favor, configura estas variables en tu archivo .env`
+  )
+}
 
 // Crear cliente de Supabase
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -18,13 +31,13 @@ export const testSupabaseConnection = async () => {
   try {
     const { data, error } = await supabase.from('profiles').select('id').limit(1)
     if (error && error.code !== 'PGRST116') {
-      console.error('❌ Error conectando a Supabase:', error.message)
+      logger.error('❌ Error conectando a Supabase:', error.message)
       return false
     }
-    console.log('✅ Supabase conectado exitosamente')
+    logger.log('✅ Supabase conectado exitosamente')
     return true
   } catch (error) {
-    console.error('❌ Error conectando a Supabase:', error.message)
+    logger.error('❌ Error conectando a Supabase:', error.message)
     return false
   }
 }

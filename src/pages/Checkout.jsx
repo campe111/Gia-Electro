@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
 import { supabase } from '../config/supabase'
 import { sendOrderEmail } from '../services/emailService'
+import { generateSecureOrderId, validateAndRecalculateTotal } from '../utils/securityUtils'
+import { logger } from '../utils/logger'
 import {
   CreditCardIcon,
   TruckIcon,
@@ -240,8 +242,22 @@ function Checkout() {
     setIsProcessing(true)
 
     try {
-      // Generar ID de orden único
-      const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+      const clientTotal = getTotalPrice()
+      
+      // Validar y recalcular total para prevenir manipulación de precios
+      const totalValidation = validateAndRecalculateTotal(cartItems, clientTotal)
+      if (!totalValidation.isValid) {
+        logger.error('Validación de precio fallida:', totalValidation.error)
+        alert('Error de validación: Los precios no coinciden. Por favor, recarga la página e intenta de nuevo.')
+        setIsProcessing(false)
+        return
+      }
+
+      // Usar el total recalculado (más seguro)
+      const validatedTotal = totalValidation.calculatedTotal
+
+      // Generar ID de orden único y seguro
+      const orderId = generateSecureOrderId()
 
       // Guardar orden
       const order = {
@@ -260,7 +276,7 @@ function Checkout() {
           country: formData.country,
         },
         items: cartItems,
-        total: getTotalPrice(),
+        total: validatedTotal,
         paymentMethod: formData.paymentMethod,
         date: new Date().toISOString(),
         status: 'pending',
@@ -286,7 +302,7 @@ function Checkout() {
               country: formData.country,
             },
             items: cartItems,
-            total: getTotalPrice(),
+            total: validatedTotal, // Usar total validado
             status: 'pending',
             payment_status: 'pending',
             payment_data: {

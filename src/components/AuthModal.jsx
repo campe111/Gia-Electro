@@ -5,6 +5,7 @@ import { XMarkIcon, EnvelopeIcon, KeyIcon } from '@heroicons/react/24/outline'
 import { useUser } from '../context/UserContext'
 import { useAdmin } from '../context/AdminContext'
 import { supabase } from '../config/supabase'
+import { logger } from '../utils/logger'
 
 function AuthModal({ isOpen, onClose }) {
   const navigate = useNavigate()
@@ -63,47 +64,39 @@ function AuthModal({ isOpen, onClose }) {
       } else {
         setError(result.error || 'Error al registrar usuario')
       }
-    } else {
-      // Verificar si son credenciales de admin primero
-      const ADMIN_EMAIL = 'giaelectro32@gmail.com'
-      const ADMIN_PASSWORD = 'Electrogiacolonia'
-      
-      if (formData.email === ADMIN_EMAIL && formData.password === ADMIN_PASSWORD) {
-        // Login como admin
-        const adminResult = adminLogin(formData.email, formData.password)
-        
-        if (adminResult.success) {
-          resetForm()
-          onClose()
-          // El Layout detectará que el admin está autenticado y mostrará el dashboard
-          // No necesitamos redirigir, solo recargar la página actual
-          window.location.reload()
-          return
-        } else {
-          setError(adminResult.error || 'Error al iniciar sesión como administrador')
-          setIsLoading(false)
-          return
-        }
-      }
-      
-      // Login normal de usuario
-      const result = await login(formData.email, formData.password)
-
-      if (result.success) {
-        resetForm()
-        onClose()
-      } else {
-        setError(result.error || 'Error al iniciar sesión')
-      }
-    }
-
+    // En AuthModal.jsx - Reemplazar el bloque de login (línea 66-90)
+} else {
+  // Intentar login (puede ser usuario normal o admin)
+  // Primero intentar como admin (usando Supabase Auth)
+  const adminResult = await adminLogin(formData.email, formData.password)
+  
+  if (adminResult.success) {
+    // Es admin, el AdminContext ya lo maneja
+    resetForm()
+    onClose()
+    // El Layout detectará que el admin está autenticado y mostrará el dashboard
+    window.location.reload()
     setIsLoading(false)
+    return
   }
+  
+  // Si no es admin pero el email es el del admin, mostrar error específico
+  if (formData.email === 'giaelectro32@gmail.com' && !adminResult.success) {
+    setError(adminResult.error || 'Credenciales de administrador incorrectas. Verifica tu contraseña en Supabase.')
+    setIsLoading(false)
+    return
+  }
+  
+  // Si no es admin, intentar login normal de usuario
+  const result = await login(formData.email, formData.password)
 
-  const handleCodeSubmit = async (e) => {
-    e.preventDefault()
-    setError('')
-    setIsLoading(true)
+  if (result.success) {
+    resetForm()
+    onClose()
+  } else {
+    setError(result.error || 'Error al iniciar sesión')
+  }
+}
 
     // Simular validación de código
     await new Promise((resolve) => setTimeout(resolve, 1000))
@@ -126,8 +119,11 @@ function AuthModal({ isOpen, onClose }) {
 
       // Obtener la URL de redirección (callback URL)
       const redirectUrl = `${window.location.origin}/auth/callback`
-      console.log('Iniciando OAuth con:', provider)
-      console.log('URL de redirección:', redirectUrl)
+      // Logger solo en desarrollo
+      if (import.meta.env.DEV) {
+        console.log('Iniciando OAuth con:', provider)
+        console.log('URL de redirección:', redirectUrl)
+      }
 
       // Usar Supabase Auth para OAuth
       if (provider === 'Google') {
@@ -143,7 +139,7 @@ function AuthModal({ isOpen, onClose }) {
         })
 
         if (error) {
-          console.error('Error en Google OAuth:', error)
+          logger.error('Error en Google OAuth:', error)
           setError(`Error al iniciar sesión con Google: ${error.message}`)
           setIsLoading(false)
           return
@@ -151,11 +147,11 @@ function AuthModal({ isOpen, onClose }) {
 
         // Si hay data y una URL, redirigir manualmente
         if (data?.url) {
-          console.log('Redirigiendo a Google OAuth:', data.url)
+          logger.log('Redirigiendo a Google OAuth:', data.url)
           window.location.href = data.url
           // No reseteamos isLoading porque la página se redirigirá
         } else {
-          console.warn('No se recibió URL de redirección de Google OAuth')
+          logger.warn('No se recibió URL de redirección de Google OAuth')
           setError('No se pudo iniciar el proceso de autenticación con Google. Por favor, verifica la configuración.')
           setIsLoading(false)
         }
@@ -168,23 +164,23 @@ function AuthModal({ isOpen, onClose }) {
         })
 
         if (error) {
-          console.error('Error en Facebook OAuth:', error)
+          logger.error('Error en Facebook OAuth:', error)
           setError(`Error al iniciar sesión con Facebook: ${error.message}`)
           setIsLoading(false)
           return
         }
 
         if (data?.url) {
-          console.log('Redirigiendo a Facebook OAuth:', data.url)
+          logger.log('Redirigiendo a Facebook OAuth:', data.url)
           window.location.href = data.url
         } else {
-          console.warn('No se recibió URL de redirección de Facebook OAuth')
+          logger.warn('No se recibió URL de redirección de Facebook OAuth')
           setError('No se pudo iniciar el proceso de autenticación con Facebook. Por favor, verifica la configuración.')
           setIsLoading(false)
         }
       }
     } catch (error) {
-      console.error(`Error al iniciar sesión con ${provider}:`, error)
+      logger.error(`Error al iniciar sesión con ${provider}:`, error)
       setError(`Error al iniciar sesión con ${provider}: ${error.message || 'Error desconocido'}`)
       setIsLoading(false)
     }

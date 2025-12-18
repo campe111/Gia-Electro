@@ -1,29 +1,30 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAdmin } from '../context/AdminContext'
+import { useAdmin, isAdminUser } from '../context/AdminContext'
 import { supabase } from '../config/supabase'
-import { createClient } from '@supabase/supabase-js'
 import { sendCustomerConfirmationEmail } from '../services/emailService'
 import { getPlaceholderImage } from '../utils/imageHelper'
+import { showToast } from '../utils/toast'
+import { logger } from '../utils/logger'
+import { format, subDays, startOfDay, endOfDay } from 'date-fns'
+import {
+  generateSecureOrderId,
+  validateAndRecalculateTotal,
+  validateFileSize,
+  validateFileType,
+  FILE_SIZE_LIMITS,
+  ALLOWED_IMAGE_TYPES,
+  ALLOWED_IMAGE_EXTENSIONS,
+  ALLOWED_EXCEL_TYPES,
+  ALLOWED_EXCEL_EXTENSIONS,
+  MAX_EXCEL_ROWS,
+} from '../utils/securityUtils'
+import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { exportToGoogleSheets } from '../utils/backupService'
 
-// Cliente de Supabase con service_role para el admin (bypass RLS)
-const supabaseAdmin = (() => {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://worpraelmlhsdkvuapbb.supabase.co'
-  const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY
-  
-  // Si hay service_role key, usarla (bypass RLS)
-  if (serviceRoleKey) {
-    return createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    })
-  }
-  
-  // Si no, usar el cliente normal (requiere políticas RLS actualizadas)
-  return supabase
-})()
+// Usar el cliente normal de Supabase con autenticación
+// Las políticas RLS permitirán acceso solo si el usuario es admin
+// NUNCA usar service_role key en el frontend por seguridad
 import {
   ArrowLeftIcon,
   MagnifyingGlassIcon,
@@ -50,16 +51,22 @@ const ORDER_STATUSES = {
 
 function AdminDashboard() {
   const navigate = useNavigate()
-  const { logout, adminUser } = useAdmin()
+  const { logout, adminUser, resetSessionTimeout } = useAdmin()
   const [orders, setOrders] = useState([])
   const [filteredOrders, setFilteredOrders] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('todos')
+  const [dateFilter, setDateFilter] = useState('todos') // 'todos', 'hoy', 'semana', 'mes'
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState('todos')
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [isSendingEmail, setIsSendingEmail] = useState(false)
   const [emailStatus, setEmailStatus] = useState({ type: '', message: '' })
   const [showAddOrderModal, setShowAddOrderModal] = useState(false)
   const [activeTab, setActiveTab] = useState('pedidos') // 'pedidos' o 'productos'
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(20)
+  const [isLoading, setIsLoading] = useState(false)
+  const [showStats, setShowStats] = useState(true)
 
   useEffect(() => {
     loadOrders()
@@ -67,19 +74,39 @@ function AdminDashboard() {
 
   useEffect(() => {
     filterOrders()
-  }, [searchTerm, statusFilter, orders])
+    setCurrentPage(1) // Resetear a primera página cuando cambian los filtros
+  }, [searchTerm, statusFilter, dateFilter, paymentMethodFilter, orders])
+
+  // Resetear timeout de sesión en actividad
+  useEffect(() => {
+    const handleActivity = () => {
+      if (resetSessionTimeout) {
+        resetSessionTimeout()
+      }
+    }
+    
+    window.addEventListener('mousedown', handleActivity)
+    window.addEventListener('keydown', handleActivity)
+    
+    return () => {
+      window.removeEventListener('mousedown', handleActivity)
+      window.removeEventListener('keydown', handleActivity)
+    }
+  }, [resetSessionTimeout])
 
   const filterOrders = () => {
     let filtered = orders
 
-    // Filtrar por búsqueda
+    // Filtrar por búsqueda (ahora incluye teléfono y dirección)
     if (searchTerm) {
       const search = searchTerm.toLowerCase()
       filtered = filtered.filter(
         (order) =>
           order.id.toLowerCase().includes(search) ||
-          order.customer.email.toLowerCase().includes(search) ||
-          `${order.customer.firstName} ${order.customer.lastName}`.toLowerCase().includes(search)
+          order.customer.email?.toLowerCase().includes(search) ||
+          order.customer.phone?.toLowerCase().includes(search) ||
+          order.shipping.address?.toLowerCase().includes(search) ||
+          `${order.customer.firstName || ''} ${order.customer.lastName || ''}`.toLowerCase().includes(search)
       )
     }
 
@@ -88,29 +115,63 @@ function AdminDashboard() {
       filtered = filtered.filter((order) => order.status === statusFilter)
     }
 
+    // Filtrar por fecha
+    if (dateFilter !== 'todos') {
+      const now = new Date()
+      const today = startOfDay(now)
+      const weekAgo = startOfDay(subDays(now, 7))
+      const monthAgo = startOfDay(subDays(now, 30))
+
+      filtered = filtered.filter((order) => {
+        const orderDate = new Date(order.date)
+        switch (dateFilter) {
+          case 'hoy':
+            return orderDate >= today
+          case 'semana':
+            return orderDate >= weekAgo
+          case 'mes':
+            return orderDate >= monthAgo
+          default:
+            return true
+        }
+      })
+    }
+
+    // Filtrar por método de pago
+    if (paymentMethodFilter !== 'todos') {
+      filtered = filtered.filter((order) => {
+        const paymentMethod = order.payment?.payment_method || 'email'
+        return paymentMethod === paymentMethodFilter
+      })
+    }
+
     setFilteredOrders(filtered)
   }
 
   const loadOrders = async () => {
+    setIsLoading(true)
     try {
-      // Usar supabaseAdmin que puede tener service_role key o el cliente normal
-      const { data, error } = await supabaseAdmin
+      // Verificar que el usuario está autenticado como admin
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session || !isAdminUser(session.user)) {
+        showToast.error('No tienes permisos para ver las órdenes')
+        setIsLoading(false)
+        return
+      }
+
+      // Usar el cliente normal de Supabase (las políticas RLS permitirán acceso solo a admins)
+      const { data, error } = await supabase
         .from('orders')
         .select('*')
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Error detallado cargando órdenes:', error)
+        logger.error('Error detallado cargando órdenes:', error)
         
         // Si es un error de permisos RLS, mostrar mensaje específico
         if (error.code === '42501' || error.message.includes('permission') || error.message.includes('policy')) {
-          alert(
-            'Error de permisos: Las políticas RLS de Supabase están bloqueando el acceso.\n\n' +
-            'Por favor, ejecuta el script SQL en Supabase:\n' +
-            '1. Ve a tu proyecto en Supabase\n' +
-            '2. Abre el SQL Editor\n' +
-            '3. Ejecuta el archivo: server/update-rls-policies.sql\n\n' +
-            'O contacta al desarrollador para configurar las políticas correctamente.'
+          showToast.error(
+            'Error de permisos: Las políticas RLS de Supabase están bloqueando el acceso. Por favor, ejecuta el script SQL en Supabase.'
           )
           throw error
         }
@@ -134,18 +195,26 @@ function AdminDashboard() {
       }))
 
       setOrders(formattedOrders)
-      console.log(`✅ Cargadas ${formattedOrders.length} órdenes`)
+      showToast.success(`Cargadas ${formattedOrders.length} órdenes`)
     } catch (error) {
-      console.error('Error cargando órdenes:', error)
-      alert('Error cargando órdenes: ' + error.message)
+      logger.error('Error cargando órdenes:', error)
+      showToast.error('Error cargando órdenes. Por favor, intenta de nuevo.')
+    } finally {
+      setIsLoading(false)
     }
   }
 
   const updateOrderStatus = async (orderId, newStatus) => {
+    if (!orderId || !newStatus) {
+      logger.error('Error: orderId o newStatus no válidos', { orderId, newStatus })
+      return
+    }
+
     try {
+      logger.log('Actualizando estado de orden:', { orderId, newStatus })
+      
       const updates = {
-        status: newStatus,
-        updated_at: new Date().toISOString()
+        status: newStatus
       }
 
       // Auto-actualizar estados relacionados
@@ -161,14 +230,7 @@ function AdminDashboard() {
         }
       }
 
-      const { error } = await supabaseAdmin
-        .from('orders')
-        .update(updates)
-        .eq('id', orderId)
-
-      if (error) throw error
-
-      // Actualizar estado local
+      // Actualizar estado local primero para feedback inmediato
       const updatedOrders = orders.map((order) => {
         if (order.id === orderId) {
           return {
@@ -183,14 +245,45 @@ function AdminDashboard() {
       })
       setOrders(updatedOrders)
 
-      // Enviar email de notificación al cliente
+      // Verificar autenticación antes de actualizar
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session || !isAdminUser(session.user)) {
+        showToast.error('No tienes permisos para actualizar órdenes')
+        return
+      }
+
+      // Actualizar en Supabase (las políticas RLS permitirán solo a admins)
+      const { data, error } = await supabase
+        .from('orders')
+        .update(updates)
+        .eq('id', orderId)
+        .select()
+
+      if (error) {
+        logger.error('Error de Supabase:', error)
+        // Revertir cambio local si falla
+        setOrders(orders)
+        throw error
+      }
+
+      logger.log('✅ Estado actualizado exitosamente:', data)
+      showToast.success(`Estado del pedido actualizado a: ${ORDER_STATUSES[newStatus]?.label || newStatus}`)
+
+      // Enviar email de notificación al cliente (sin bloquear si falla)
       const updatedOrder = updatedOrders.find(o => o.id === orderId)
       if (updatedOrder) {
-        await sendNotificationEmail(updatedOrder, newStatus)
+        try {
+          await sendNotificationEmail(updatedOrder, newStatus)
+        } catch (emailError) {
+          logger.error('Error enviando email (no crítico):', emailError)
+          // No mostrar error al usuario si el email falla
+        }
       }
     } catch (error) {
-      console.error('Error actualizando orden:', error)
-      alert('Error actualizando orden: ' + error.message)
+      logger.error('Error actualizando orden:', error)
+      showToast.error('Error actualizando orden. Por favor, intenta de nuevo.')
+      // Recargar órdenes para sincronizar
+      loadOrders()
     }
   }
 
@@ -201,7 +294,7 @@ function AdminDashboard() {
       const result = await sendCustomerConfirmationEmail(order, status)
       
       if (result.success) {
-        console.log(`✅ Email de confirmación enviado a ${order.customer.email}`)
+        logger.log(`✅ Email de confirmación enviado a ${order.customer.email}`)
         
         // Guardar notificación
         const savedNotifications = JSON.parse(localStorage.getItem('adminNotifications') || '[]')
@@ -214,10 +307,10 @@ function AdminDashboard() {
         })
         localStorage.setItem('adminNotifications', JSON.stringify(savedNotifications))
       } else {
-        console.warn('Email no enviado, pero guardado para procesamiento posterior')
+        logger.warn('Email no enviado, pero guardado para procesamiento posterior')
       }
     } catch (error) {
-      console.error('Error enviando email de notificación:', error)
+      logger.error('Error enviando email de notificación:', error)
     }
   }
 
@@ -269,21 +362,153 @@ function AdminDashboard() {
     const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0)
     const pendingOrders = orders.filter((o) => o.status === 'pending').length
     const processingOrders = orders.filter((o) => o.status === 'processing').length
+    const paidOrders = orders.filter((o) => o.status === 'paid').length
+    const shippedOrders = orders.filter((o) => o.status === 'shipped').length
+    const deliveredOrders = orders.filter((o) => o.status === 'delivered').length
+    const cancelledOrders = orders.filter((o) => o.status === 'cancelled').length
+
+    // Estadísticas por fecha
+    const today = startOfDay(new Date())
+    const weekAgo = startOfDay(subDays(new Date(), 7))
+    const monthAgo = startOfDay(subDays(new Date(), 30))
+
+    const todayOrders = orders.filter(o => new Date(o.date) >= today)
+    const weekOrders = orders.filter(o => new Date(o.date) >= weekAgo)
+    const monthOrders = orders.filter(o => new Date(o.date) >= monthAgo)
+
+    const todayRevenue = todayOrders.reduce((sum, order) => sum + order.total, 0)
+    const weekRevenue = weekOrders.reduce((sum, order) => sum + order.total, 0)
+    const monthRevenue = monthOrders.reduce((sum, order) => sum + order.total, 0)
+
+    // Estadísticas por estado para gráfico
+    const statusData = [
+      { name: 'Pendiente', value: pendingOrders, color: '#fbbf24' },
+      { name: 'Procesando', value: processingOrders, color: '#3b82f6' },
+      { name: 'Pagado', value: paidOrders, color: '#10b981' },
+      { name: 'Enviado', value: shippedOrders, color: '#a855f7' },
+      { name: 'Entregado', value: deliveredOrders, color: '#059669' },
+      { name: 'Cancelado', value: cancelledOrders, color: '#ef4444' },
+    ]
+
+    // Ventas por día (últimos 7 días)
+    const salesByDay = []
+    for (let i = 6; i >= 0; i--) {
+      const date = subDays(new Date(), i)
+      const dayStart = startOfDay(date)
+      const dayEnd = endOfDay(date)
+      const dayOrders = orders.filter(o => {
+        const orderDate = new Date(o.date)
+        return orderDate >= dayStart && orderDate <= dayEnd
+      })
+      salesByDay.push({
+        date: format(date, 'dd/MM'),
+        ventas: dayOrders.length,
+        ingresos: dayOrders.reduce((sum, o) => sum + o.total, 0),
+      })
+    }
 
     return {
       totalOrders,
       totalRevenue,
       pendingOrders,
       processingOrders,
+      paidOrders,
+      shippedOrders,
+      deliveredOrders,
+      cancelledOrders,
+      todayOrders: todayOrders.length,
+      todayRevenue,
+      weekOrders: weekOrders.length,
+      weekRevenue,
+      monthOrders: monthOrders.length,
+      monthRevenue,
+      statusData,
+      salesByDay,
     }
   }
 
+  // Función para exportar pedidos a Excel
+  const exportToExcel = async () => {
+    try {
+      const XLSX = await import('xlsx')
+      
+      // Preparar datos para exportar
+      const dataToExport = filteredOrders.map(order => ({
+        'ID Pedido': order.id,
+        'Fecha': format(new Date(order.date), 'dd/MM/yyyy HH:mm'),
+        'Cliente': `${order.customer.firstName} ${order.customer.lastName}`,
+        'Email': order.customer.email,
+        'Teléfono': order.customer.phone,
+        'Dirección': order.shipping.address,
+        'Ciudad': order.shipping.city,
+        'Estado/Provincia': order.shipping.state,
+        'Código Postal': order.shipping.zipCode,
+        'Total': order.total,
+        'Estado Pedido': ORDER_STATUSES[order.status]?.label || order.status,
+        'Método de Pago': order.payment?.payment_method || 'email',
+        'Tracking': order.trackingNumber || '',
+        'Productos': order.items.map(item => `${item.name} (x${item.quantity})`).join('; '),
+      }))
+
+      // Crear workbook
+      const wb = XLSX.utils.book_new()
+      const ws = XLSX.utils.json_to_sheet(dataToExport)
+      
+      // Ajustar ancho de columnas
+      const colWidths = [
+        { wch: 20 }, // ID Pedido
+        { wch: 18 }, // Fecha
+        { wch: 25 }, // Cliente
+        { wch: 30 }, // Email
+        { wch: 15 }, // Teléfono
+        { wch: 30 }, // Dirección
+        { wch: 20 }, // Ciudad
+        { wch: 20 }, // Estado
+        { wch: 12 }, // Código Postal
+        { wch: 12 }, // Total
+        { wch: 15 }, // Estado
+        { wch: 15 }, // Método de Pago
+        { wch: 20 }, // Tracking
+        { wch: 50 }, // Productos
+      ]
+      ws['!cols'] = colWidths
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Pedidos')
+      
+      // Generar nombre de archivo con fecha
+      const fileName = `pedidos_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.xlsx`
+      
+      // Descargar
+      XLSX.writeFile(wb, fileName)
+      showToast.success(`Exportados ${filteredOrders.length} pedidos a Excel`)
+    } catch (error) {
+      logger.error('Error exportando a Excel:', error)
+      showToast.error('Error al exportar a Excel. Por favor, intenta de nuevo.')
+    }
+  }
+
+  // Paginación
+  const indexOfLastOrder = currentPage * itemsPerPage
+  const indexOfFirstOrder = indexOfLastOrder - itemsPerPage
+  const currentOrders = filteredOrders.slice(indexOfFirstOrder, indexOfLastOrder)
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage)
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber)
+
   const stats = getStatistics()
 
-  const handleLogout = () => {
-    logout()
-    // Redirigir al home para que el Layout muestre el contenido normal
-    navigate('/')
+  const handleLogout = async () => {
+    try {
+      await logout()
+      // Esperar un momento para que el estado se actualice
+      await new Promise(resolve => setTimeout(resolve, 100))
+      // Redirigir al home para que el Layout muestre el contenido normal
+      window.location.href = '/'
+    } catch (error) {
+      logger.error('Error al cerrar sesión:', error)
+      // Forzar recarga de la página
+      window.location.href = '/'
+    }
   }
 
   return (
@@ -293,19 +518,35 @@ function AdminDashboard() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-primary-black">
+              <h1 className="text-xl md:text-2xl font-bold text-primary-black">
                 Panel de Administración
               </h1>
-              <p className="text-sm text-gray-600">
+              <p className="text-xs md:text-sm text-gray-600">
                 Bienvenido, {adminUser?.name || 'Admin'}
               </p>
             </div>
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-            >
-              Cerrar Sesión
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={async () => {
+                  try {
+                    await exportToGoogleSheets(orders)
+                    showToast.success('Backup exportado exitosamente')
+                  } catch (error) {
+                    showToast.error('Error al exportar backup: ' + error.message)
+                  }
+                }}
+                className="px-3 md:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs md:text-sm"
+                title="Exportar backup"
+              >
+                📥 Backup
+              </button>
+              <button
+                onClick={handleLogout}
+                className="px-3 md:px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs md:text-sm"
+              >
+                Cerrar Sesión
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -393,33 +634,167 @@ function AdminDashboard() {
           </div>
         </div>
 
-        {/* Filtros y Búsqueda */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1 relative">
-              <MagnifyingGlassIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Buscar por ID de orden, email, nombre..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
-              />
-            </div>
-            <div className="relative">
-              <FunnelIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="pl-12 pr-8 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow appearance-none bg-white"
+        {/* Estadísticas Expandidas con Gráficos */}
+        {showStats && (
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-primary-black">Estadísticas y Reportes</h2>
+              <button
+                onClick={() => setShowStats(!showStats)}
+                className="text-gray-500 hover:text-gray-700"
               >
-                <option value="todos">Todos los estados</option>
-                {Object.entries(ORDER_STATUSES).map(([key, { label }]) => (
-                  <option key={key} value={key}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+                {showStats ? 'Ocultar' : 'Mostrar'}
+              </button>
+            </div>
+            
+            {/* KPIs Adicionales */}
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
+              <div className="bg-blue-50 rounded-lg p-4">
+                <p className="text-xs text-gray-600">Hoy</p>
+                <p className="text-lg font-bold text-blue-600">{stats.todayOrders}</p>
+                <p className="text-xs text-gray-500">${stats.todayRevenue.toLocaleString()}</p>
+              </div>
+              <div className="bg-green-50 rounded-lg p-4">
+                <p className="text-xs text-gray-600">Esta Semana</p>
+                <p className="text-lg font-bold text-green-600">{stats.weekOrders}</p>
+                <p className="text-xs text-gray-500">${stats.weekRevenue.toLocaleString()}</p>
+              </div>
+              <div className="bg-purple-50 rounded-lg p-4">
+                <p className="text-xs text-gray-600">Este Mes</p>
+                <p className="text-lg font-bold text-purple-600">{stats.monthOrders}</p>
+                <p className="text-xs text-gray-500">${stats.monthRevenue.toLocaleString()}</p>
+              </div>
+              <div className="bg-yellow-50 rounded-lg p-4">
+                <p className="text-xs text-gray-600">Pendientes</p>
+                <p className="text-lg font-bold text-yellow-600">{stats.pendingOrders}</p>
+              </div>
+              <div className="bg-blue-50 rounded-lg p-4">
+                <p className="text-xs text-gray-600">Procesando</p>
+                <p className="text-lg font-bold text-blue-600">{stats.processingOrders}</p>
+              </div>
+              <div className="bg-green-50 rounded-lg p-4">
+                <p className="text-xs text-gray-600">Entregados</p>
+                <p className="text-lg font-bold text-green-600">{stats.deliveredOrders}</p>
+              </div>
+              <div className="bg-red-50 rounded-lg p-4">
+                <p className="text-xs text-gray-600">Cancelados</p>
+                <p className="text-lg font-bold text-red-600">{stats.cancelledOrders}</p>
+              </div>
+            </div>
+
+            {/* Gráficos */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Gráfico de Ventas por Día */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h3 className="text-lg font-semibold mb-4">Ventas Últimos 7 Días</h3>
+                <ResponsiveContainer width="100%" height={250}>
+                  <LineChart data={stats.salesByDay}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="ventas" stroke="#ef4444" name="Pedidos" />
+                    <Line type="monotone" dataKey="ingresos" stroke="#10b981" name="Ingresos ($)" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Gráfico de Estados */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h3 className="text-lg font-semibold mb-4">Distribución por Estado</h3>
+                <ResponsiveContainer width="100%" height={250}>
+                  <PieChart>
+                    <Pie
+                      data={stats.statusData.filter(d => d.value > 0)}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {stats.statusData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Filtros y Búsqueda Avanzada */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 relative">
+                <MagnifyingGlassIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar por ID, email, nombre, teléfono, dirección..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                />
+              </div>
+              <button
+                onClick={exportToExcel}
+                className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold flex items-center gap-2"
+              >
+                <PrinterIcon className="h-5 w-5" />
+                Exportar Excel
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="relative">
+                <FunnelIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full pl-12 pr-8 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow appearance-none bg-white"
+                >
+                  <option value="todos">Todos los estados</option>
+                  {Object.entries(ORDER_STATUSES).map(([key, { label }]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="relative">
+                <FunnelIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <select
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  className="w-full pl-12 pr-8 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow appearance-none bg-white"
+                >
+                  <option value="todos">Todas las fechas</option>
+                  <option value="hoy">Hoy</option>
+                  <option value="semana">Última semana</option>
+                  <option value="mes">Último mes</option>
+                </select>
+              </div>
+              <div className="relative">
+                <FunnelIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <select
+                  value={paymentMethodFilter}
+                  onChange={(e) => setPaymentMethodFilter(e.target.value)}
+                  className="w-full pl-12 pr-8 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow appearance-none bg-white"
+                >
+                  <option value="todos">Todos los métodos</option>
+                  <option value="email">Email</option>
+                  <option value="credit">Tarjeta de Crédito</option>
+                  <option value="debit">Tarjeta de Débito</option>
+                  <option value="transfer">Transferencia</option>
+                </select>
+              </div>
+            </div>
+            <div className="text-sm text-gray-600">
+              Mostrando {filteredOrders.length} de {orders.length} pedidos
             </div>
           </div>
         </div>
@@ -451,14 +826,14 @@ function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredOrders.length === 0 ? (
+                {currentOrders.length === 0 ? (
                   <tr>
                     <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
-                      No se encontraron órdenes
+                      {isLoading ? 'Cargando...' : 'No se encontraron órdenes'}
                     </td>
                   </tr>
                 ) : (
-                  filteredOrders.map((order) => {
+                  currentOrders.map((order) => {
                     const StatusIcon = ORDER_STATUSES[order.status]?.icon || ClockIcon
                     return (
                       <tr key={order.id} className="hover:bg-gray-50">
@@ -500,11 +875,18 @@ function AdminDashboard() {
                               Ver
                             </button>
                             <select
-                              value={order.status}
-                              onChange={(e) =>
-                                updateOrderStatus(order.id, e.target.value)
-                              }
-                              className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                              value={order.status || 'pending'}
+                              onChange={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                const newStatus = e.target.value
+                                if (newStatus && newStatus !== order.status) {
+                                  updateOrderStatus(order.id, newStatus)
+                                }
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-yellow bg-white cursor-pointer"
                             >
                               {Object.entries(ORDER_STATUSES).map(([key, { label }]) => (
                                 <option key={key} value={key}>
@@ -751,7 +1133,7 @@ function AddOrderFromEmailModal({ isOpen, onClose, onOrderAdded }) {
       // Buscar ID de pedido
       const orderIdMatch = emailContent.match(/ID de Pedido:\s*([A-Z0-9-]+)/i) || 
                           emailContent.match(/Pedido[#\s]*([A-Z0-9-]+)/i)
-      const orderId = orderIdMatch ? orderIdMatch[1] : `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+      const orderId = orderIdMatch ? orderIdMatch[1] : generateSecureOrderId()
 
       // Buscar nombre del cliente
       const nameMatch = emailContent.match(/Nombre:\s*([^\n]+)/i)
@@ -853,10 +1235,26 @@ function AddOrderFromEmailModal({ isOpen, onClose, onOrderAdded }) {
     setError('')
 
     try {
-      const orderId = parsedData?.orderId || `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+      const orderId = parsedData?.orderId || generateSecureOrderId()
       
       const [firstName, ...lastNameParts] = manualForm.customerName.split(' ')
       const lastName = lastNameParts.join(' ') || ''
+
+      // Filtrar items válidos
+      const validItems = manualForm.items.filter(item => item.name && item.quantity > 0)
+      
+      // Calcular total basado en items
+      const calculatedTotal = validItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+      const providedTotal = manualForm.total || calculatedTotal
+
+      // Validar y recalcular total para prevenir manipulación
+      const totalValidation = validateAndRecalculateTotal(validItems, providedTotal)
+      if (!totalValidation.isValid) {
+        logger.error('Validación de precio fallida en orden manual:', totalValidation.error)
+        setError(`Error de validación: ${totalValidation.error}`)
+        setIsProcessing(false)
+        return
+      }
 
       const orderData = {
         id: orderId,
@@ -873,8 +1271,8 @@ function AddOrderFromEmailModal({ isOpen, onClose, onOrderAdded }) {
           zipCode: manualForm.zipCode,
           country: manualForm.country,
         },
-        items: manualForm.items.filter(item => item.name && item.quantity > 0),
-        total: manualForm.total || manualForm.items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+        items: validItems,
+        total: totalValidation.calculatedTotal, // Usar total validado
         status: 'pending',
         payment_status: 'pending',
         payment_data: {
@@ -883,7 +1281,13 @@ function AddOrderFromEmailModal({ isOpen, onClose, onOrderAdded }) {
         user_id: null,
       }
 
-      const { error: supabaseError } = await supabaseAdmin
+      // Verificar autenticación antes de insertar
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session || !isAdminUser(session.user)) {
+        throw new Error('No tienes permisos para crear órdenes')
+      }
+
+      const { error: supabaseError } = await supabase
         .from('orders')
         .insert([orderData])
 
@@ -891,8 +1295,8 @@ function AddOrderFromEmailModal({ isOpen, onClose, onOrderAdded }) {
 
       onOrderAdded()
     } catch (err) {
-      console.error('Error guardando pedido:', err)
-      setError('Error al guardar el pedido: ' + err.message)
+      logger.error('Error guardando pedido:', err)
+      setError('Error al guardar el pedido. Por favor, intenta de nuevo.')
     } finally {
       setIsProcessing(false)
     }
@@ -1149,6 +1553,659 @@ function AddOrderFromEmailModal({ isOpen, onClose, onOrderAdded }) {
           </div>
         </form>
       </div>
+    </div>
+  )
+}
+
+// Componente de Gestión de Productos
+function ProductManagementSection() {
+  const [products, setProducts] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [uploadStatus, setUploadStatus] = useState({ type: '', message: '' })
+  const [selectedProduct, setSelectedProduct] = useState(null)
+  const [showImageUpload, setShowImageUpload] = useState(false)
+  const [showExcelPreview, setShowExcelPreview] = useState(false)
+  const [excelPreviewData, setExcelPreviewData] = useState([])
+  const [editingProduct, setEditingProduct] = useState(null)
+  const [categories, setCategories] = useState([])
+  const [brands, setBrands] = useState([])
+  const [showCategoryManager, setShowCategoryManager] = useState(false)
+
+  useEffect(() => {
+    loadProducts()
+  }, [])
+
+  useEffect(() => {
+    // Extraer categorías y marcas únicas de productos
+    const uniqueCategories = [...new Set(products.map(p => p.category).filter(Boolean))]
+    const uniqueBrands = [...new Set(products.map(p => p.brand).filter(Boolean))]
+    setCategories(uniqueCategories.sort())
+    setBrands(uniqueBrands.sort())
+  }, [products])
+
+  const loadProducts = () => {
+    // Cargar productos desde localStorage o el archivo de datos
+    try {
+      const savedProducts = localStorage.getItem('giaElectroProducts')
+      if (savedProducts) {
+        setProducts(JSON.parse(savedProducts))
+      } else {
+        // Importar productos iniciales
+        import('../data/products').then((module) => {
+          setProducts(module.products)
+          localStorage.setItem('giaElectroProducts', JSON.stringify(module.products))
+        })
+      }
+    } catch (error) {
+      logger.error('Error cargando productos:', error)
+    }
+  }
+
+  const handleExcelUpload = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    // Validar tamaño del archivo
+    const sizeValidation = validateFileSize(file, FILE_SIZE_LIMITS.EXCEL)
+    if (!sizeValidation.isValid) {
+      showToast.error(sizeValidation.error)
+      e.target.value = '' // Limpiar input
+      return
+    }
+
+    // Validar tipo de archivo
+    const typeValidation = validateFileType(file, ALLOWED_EXCEL_TYPES, ALLOWED_EXCEL_EXTENSIONS)
+    if (!typeValidation.isValid) {
+      showToast.error(typeValidation.error)
+      e.target.value = '' // Limpiar input
+      return
+    }
+
+    setIsLoading(true)
+    setUploadStatus({ type: '', message: '' })
+
+    try {
+      const XLSX = await import('xlsx')
+      const reader = new FileReader()
+
+      reader.onload = (event) => {
+        try {
+          const data = new Uint8Array(event.target.result)
+          const workbook = XLSX.read(data, { type: 'array' })
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
+          const jsonData = XLSX.utils.sheet_to_json(firstSheet)
+
+          // Validar límite de filas
+          if (jsonData.length > MAX_EXCEL_ROWS) {
+            throw new Error(`El archivo tiene demasiadas filas (${jsonData.length}). Máximo permitido: ${MAX_EXCEL_ROWS} filas.`)
+          }
+
+          // Validar datos primero
+          const validationErrors = []
+          jsonData.forEach((row, index) => {
+            if (!row.Nombre && !row.name && !row.Producto && !row.Nombre_Producto) {
+              validationErrors.push(`Fila ${index + 2}: Falta el nombre del producto`)
+            }
+            const price = parseFloat(row.Precio || row.price || row.PRECIO || 0)
+            if (!price || price <= 0) {
+              validationErrors.push(`Fila ${index + 2}: Precio inválido`)
+            }
+          })
+
+          if (validationErrors.length > 0) {
+            setUploadStatus({
+              type: 'error',
+              message: `Errores de validación:\n${validationErrors.slice(0, 5).join('\n')}${validationErrors.length > 5 ? `\n... y ${validationErrors.length - 5} más` : ''}`
+            })
+            setIsLoading(false)
+            return
+          }
+
+          // Función de validación y sanitización de datos del producto
+          const validateAndSanitizeProduct = (product, index) => {
+            // Validar que name no contenga scripts o código malicioso
+            if (product.name && (/<script|javascript:|on\w+=/i.test(product.name))) {
+              throw new Error(`Fila ${index + 2}: El nombre del producto contiene caracteres no permitidos`)
+            }
+            
+            // Validar que price sea un número positivo
+            if (isNaN(product.price) || product.price <= 0) {
+              throw new Error(`Fila ${index + 2}: El precio debe ser un número positivo`)
+            }
+            
+            // Sanitizar name (remover caracteres peligrosos)
+            if (product.name) {
+              product.name = product.name
+                .replace(/[<>]/g, '')
+                .replace(/javascript:/gi, '')
+                .replace(/on\w+=/gi, '')
+                .trim()
+            }
+            
+            // Sanitizar description
+            if (product.description) {
+              product.description = product.description
+                .replace(/[<>]/g, '')
+                .replace(/javascript:/gi, '')
+                .replace(/on\w+=/gi, '')
+            }
+            
+            // Validar que category sea válida
+            if (product.category && product.category.length > 50) {
+              product.category = product.category.substring(0, 50)
+            }
+            
+            return product
+          }
+
+          // Procesar datos
+          const processedProducts = jsonData.map((row, index) => {
+            // Mapear columnas del Excel a la estructura del producto
+            const productId = row.ID || row.id || row.Id || (index + 1)
+            const productName = row.Nombre || row.name || row.Producto || row.Nombre_Producto || ''
+            const productPrice = parseFloat(row.Precio || row.price || row.PRECIO || 0)
+            const productCategory = row.Categoria || row.category || row.CATEGORIA || 'otros'
+            const productBrand = row.Marca || row.brand || row.MARCA || ''
+            const productDescription = row.Descripcion || row.description || row.DESCRIPCION || ''
+            const productImage = row.Imagen || row.image || row.IMAGEN || row.Imagen_URL || ''
+            const previousPrice = row['Precio Anterior'] || row.previousPrice || row.PRECIO_ANTERIOR ? parseFloat(row['Precio Anterior'] || row.previousPrice || row.PRECIO_ANTERIOR) : null
+
+            const product = {
+              id: productId,
+              name: productName,
+              brand: productBrand,
+              price: productPrice,
+              category: productCategory.toLowerCase().replace(/\s+/g, '-'),
+              description: productDescription,
+              image: productImage,
+              previousPrice: previousPrice,
+            }
+            
+            // Validar y sanitizar
+            return validateAndSanitizeProduct(product, index)
+          }).filter(p => p.name && p.price > 0)
+
+          if (processedProducts.length === 0) {
+            throw new Error('No se encontraron productos válidos en el archivo Excel')
+          }
+
+          // Mostrar preview antes de confirmar
+          setExcelPreviewData(processedProducts)
+          setShowExcelPreview(true)
+          setIsLoading(false)
+          
+          // Limpiar input
+          e.target.value = ''
+        } catch (error) {
+          logger.error('Error procesando Excel:', error)
+          showToast.error('Error al procesar el archivo Excel. Por favor, verifica el formato del archivo.')
+          setIsLoading(false)
+        }
+      }
+
+      reader.onerror = () => {
+        setUploadStatus({
+          type: 'error',
+          message: 'Error al leer el archivo'
+        })
+        setIsLoading(false)
+      }
+
+      reader.readAsArrayBuffer(file)
+    } catch (error) {
+      logger.error('Error cargando librería Excel:', error)
+      setUploadStatus({
+        type: 'error',
+        message: 'Error al cargar el archivo Excel. Asegúrate de que el archivo sea válido.'
+      })
+      setIsLoading(false)
+    }
+  }
+
+  const confirmExcelUpload = () => {
+    setProducts(excelPreviewData)
+    localStorage.setItem('giaElectroProducts', JSON.stringify(excelPreviewData))
+    
+    // Disparar evento para actualizar
+    window.dispatchEvent(new Event('storage'))
+    
+    showToast.success(`✅ ${excelPreviewData.length} productos cargados exitosamente`)
+    setShowExcelPreview(false)
+    setExcelPreviewData([])
+  }
+
+  const cancelExcelUpload = () => {
+    setShowExcelPreview(false)
+    setExcelPreviewData([])
+  }
+
+  const updateProduct = (productId, field, value) => {
+    const updatedProducts = products.map(p =>
+      p.id === productId ? { ...p, [field]: value } : p
+    )
+    setProducts(updatedProducts)
+    localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
+    window.dispatchEvent(new Event('storage'))
+    showToast.success('Producto actualizado')
+  }
+
+  const deleteProduct = (productId) => {
+    if (window.confirm('¿Estás seguro de eliminar este producto?')) {
+      const updatedProducts = products.filter(p => p.id !== productId)
+      setProducts(updatedProducts)
+      localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
+      window.dispatchEvent(new Event('storage'))
+      showToast.success('Producto eliminado')
+    }
+  }
+
+  const handleImageUpload = async (e, productId) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    // Validar tamaño del archivo
+    const sizeValidation = validateFileSize(file, FILE_SIZE_LIMITS.IMAGE)
+    if (!sizeValidation.isValid) {
+      showToast.error(sizeValidation.error)
+      e.target.value = '' // Limpiar input
+      return
+    }
+
+    // Validar tipo de archivo (tipo MIME y extensión)
+    const typeValidation = validateFileType(file, ALLOWED_IMAGE_TYPES, ALLOWED_IMAGE_EXTENSIONS)
+    if (!typeValidation.isValid) {
+      showToast.error(typeValidation.error)
+      e.target.value = '' // Limpiar input
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      // Convertir imagen a base64
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        const imageDataUrl = event.target.result
+        
+        // Actualizar producto con nueva imagen
+        const updatedProducts = products.map(p => 
+          p.id === productId 
+            ? { ...p, image: imageDataUrl }
+            : p
+        )
+        
+        setProducts(updatedProducts)
+        localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
+
+        // Disparar evento para actualizar en otras ventanas
+        window.dispatchEvent(new Event('storage'))
+        
+        showToast.success('Imagen actualizada exitosamente')
+        
+        setShowImageUpload(false)
+        setSelectedProduct(null)
+        setIsLoading(false)
+      }
+      
+      reader.onerror = () => {
+        showToast.error('Error al leer la imagen')
+        setIsLoading(false)
+      }
+      
+      reader.readAsDataURL(file)
+    } catch (error) {
+      logger.error('Error subiendo imagen:', error)
+      showToast.error('Error al subir la imagen. Por favor, intenta de nuevo.')
+      setIsLoading(false)
+    }
+  }
+
+  const updateProductPrice = (productId, newPrice) => {
+    const updatedProducts = products.map(p =>
+      p.id === productId ? { ...p, price: parseFloat(newPrice) || 0 } : p
+    )
+    setProducts(updatedProducts)
+    localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
+    
+    // Disparar evento para actualizar
+    window.dispatchEvent(new Event('storage'))
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header de Productos */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-primary-black mb-2">
+              Gestión de Productos
+            </h2>
+            <p className="text-gray-600">
+              {products.length} productos en el catálogo
+            </p>
+          </div>
+          <div className="flex gap-3 flex-wrap">
+            <label className="px-4 py-2 bg-primary-yellow text-primary-black rounded-lg hover:bg-yellow-500 transition-colors font-semibold cursor-pointer flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+              {isLoading ? (
+                <>
+                  <span className="animate-spin">⏳</span>
+                  <span>Cargando...</span>
+                </>
+              ) : (
+                <>
+                  <PlusIcon className="h-5 w-5" />
+                  <span>Subir Excel</span>
+                </>
+              )}
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleExcelUpload}
+                className="hidden"
+                disabled={isLoading}
+              />
+            </label>
+            <button
+              onClick={() => setShowCategoryManager(!showCategoryManager)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold flex items-center gap-2"
+            >
+              <FunnelIcon className="h-5 w-5" />
+              <span>Categorías y Marcas</span>
+            </button>
+          </div>
+        </div>
+
+
+        {/* Instrucciones para Excel */}
+        <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h3 className="font-semibold text-primary-black mb-2">📋 Formato del archivo Excel:</h3>
+          <p className="text-sm text-gray-700 mb-2">
+            El archivo Excel debe tener las siguientes columnas (la primera fila debe ser el encabezado):
+          </p>
+          <ul className="text-sm text-gray-700 list-disc list-inside space-y-1">
+            <li><strong>ID</strong> o <strong>id</strong>: ID único del producto (número)</li>
+            <li><strong>Nombre</strong> o <strong>name</strong> o <strong>Producto</strong>: Nombre del producto (requerido)</li>
+            <li><strong>Precio</strong> o <strong>price</strong>: Precio del producto (requerido, número)</li>
+            <li><strong>Categoria</strong> o <strong>category</strong>: Categoría del producto (requerido)</li>
+            <li><strong>Marca</strong> o <strong>brand</strong>: Marca (opcional)</li>
+            <li><strong>Descripcion</strong> o <strong>description</strong>: Descripción (opcional)</li>
+            <li><strong>Imagen</strong> o <strong>image</strong> o <strong>Imagen_URL</strong>: URL o ruta de imagen (opcional, también puedes subir imágenes individualmente)</li>
+            <li><strong>Precio Anterior</strong> o <strong>previousPrice</strong>: Precio anterior para mostrar oferta (opcional)</li>
+          </ul>
+        </div>
+      </div>
+
+      {/* Lista de Productos */}
+      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        {isLoading && products.length === 0 ? (
+          <div className="p-8 text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-yellow"></div>
+            <p className="mt-4 text-gray-600">Cargando productos...</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                  <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">Imagen</th>
+                  <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
+                  <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Categoría</th>
+                  <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Precio</th>
+                  <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {products.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
+                      No hay productos. Sube un archivo Excel para comenzar.
+                    </td>
+                  </tr>
+                ) : (
+                  products.map((product) => (
+                    <tr key={product.id} className="hover:bg-gray-50">
+                      <td className="px-3 md:px-6 py-4 whitespace-nowrap text-sm">{product.id}</td>
+                      <td className="px-3 md:px-6 py-4 whitespace-nowrap hidden sm:table-cell">
+                      <img
+                        src={product.image || getPlaceholderImage(50, 50, 'Sin imagen')}
+                        alt={product.name}
+                        className="w-12 h-12 md:w-16 md:h-16 object-cover rounded"
+                        loading="lazy"
+                        onError={(e) => {
+                          e.target.src = getPlaceholderImage(50, 50, 'Sin imagen')
+                        }}
+                      />
+                    </td>
+                    <td className="px-3 md:px-6 py-4">
+                      {editingProduct?.id === product.id ? (
+                        <input
+                          type="text"
+                          value={editingProduct.name}
+                          onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                          onBlur={() => {
+                            updateProduct(product.id, 'name', editingProduct.name)
+                            setEditingProduct(null)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              updateProduct(product.id, 'name', editingProduct.name)
+                              setEditingProduct(null)
+                            }
+                            if (e.key === 'Escape') {
+                              setEditingProduct(null)
+                            }
+                          }}
+                          autoFocus
+                        />
+                      ) : (
+                        <div 
+                          className="text-sm font-medium text-gray-900 cursor-pointer hover:text-primary-red"
+                          onClick={() => setEditingProduct(product)}
+                        >
+                          {product.name}
+                        </div>
+                      )}
+                      {product.brand && (
+                        <div className="text-xs md:text-sm text-gray-500">{product.brand}</div>
+                      )}
+                    </td>
+                    <td className="px-3 md:px-6 py-4 whitespace-nowrap text-sm hidden md:table-cell">
+                      {editingProduct?.id === product.id ? (
+                        <select
+                          value={editingProduct.category}
+                          onChange={(e) => {
+                            const newProduct = { ...editingProduct, category: e.target.value }
+                            setEditingProduct(newProduct)
+                            updateProduct(product.id, 'category', e.target.value)
+                          }}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                        >
+                          {categories.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span 
+                          className="text-gray-500 cursor-pointer hover:text-primary-red"
+                          onClick={() => setEditingProduct(product)}
+                        >
+                          {product.category}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 md:px-6 py-4 whitespace-nowrap">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={product.price}
+                        onChange={(e) => updateProductPrice(product.id, e.target.value)}
+                        className="w-20 md:w-24 px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-yellow text-sm font-semibold"
+                      />
+                    </td>
+                    <td className="px-3 md:px-6 py-4 whitespace-nowrap text-sm">
+                      <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
+                        <button
+                          onClick={() => {
+                            setSelectedProduct(product)
+                            setShowImageUpload(true)
+                          }}
+                          className="text-primary-yellow hover:text-yellow-600 font-semibold text-xs sm:text-sm"
+                        >
+                          Imagen
+                        </button>
+                        <button
+                          onClick={() => deleteProduct(product.id)}
+                          className="text-red-600 hover:text-red-800 font-semibold text-xs sm:text-sm"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        )}
+      </div>
+
+      {/* Modal de Preview de Excel */}
+      {showExcelPreview && excelPreviewData.length > 0 && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-primary-black">
+                Vista Previa - {excelPreviewData.length} productos
+              </h2>
+              <button
+                onClick={cancelExcelUpload}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <XCircleIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-blue-800">
+                  Revisa los productos antes de confirmar. Se reemplazarán todos los productos actuales.
+                </p>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Categoría</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Precio</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Marca</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {excelPreviewData.slice(0, 20).map((product, index) => (
+                      <tr key={index}>
+                        <td className="px-4 py-2 text-sm">{product.id}</td>
+                        <td className="px-4 py-2 text-sm">{product.name}</td>
+                        <td className="px-4 py-2 text-sm">{product.category}</td>
+                        <td className="px-4 py-2 text-sm font-semibold">${product.price.toLocaleString()}</td>
+                        <td className="px-4 py-2 text-sm">{product.brand || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {excelPreviewData.length > 20 && (
+                  <p className="mt-4 text-sm text-gray-500 text-center">
+                    ... y {excelPreviewData.length - 20} productos más
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-4 mt-6 pt-4 border-t">
+                <button
+                  onClick={cancelExcelUpload}
+                  className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmExcelUpload}
+                  className="flex-1 px-6 py-3 bg-primary-yellow text-primary-black rounded-lg hover:bg-yellow-500 transition-colors font-semibold"
+                >
+                  Confirmar y Cargar {excelPreviewData.length} Productos
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para subir imagen */}
+      {showImageUpload && selectedProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-primary-black">
+                Subir Imagen para: {selectedProduct.name}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowImageUpload(false)
+                  setSelectedProduct(null)
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <XCircleIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Seleccionar Imagen
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleImageUpload(e, selectedProduct.id)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                  disabled={isLoading}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Formatos soportados: JPG, PNG, GIF, WebP
+                </p>
+              </div>
+
+              {selectedProduct.image && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Imagen Actual:</p>
+                  <img
+                    src={selectedProduct.image}
+                    alt={selectedProduct.name}
+                    className="w-full h-48 object-contain border border-gray-300 rounded"
+                    onError={(e) => {
+                      e.target.src = getPlaceholderImage(200, 200, 'Sin imagen')
+                    }}
+                  />
+                </div>
+              )}
+
+              <button
+                onClick={() => {
+                  setShowImageUpload(false)
+                  setSelectedProduct(null)
+                }}
+                className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

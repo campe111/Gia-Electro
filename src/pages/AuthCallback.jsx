@@ -1,51 +1,53 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useUser } from '../context/UserContext'
 import { supabase } from '../config/supabase'
+import { logger } from '../utils/logger'
 
 function AuthCallback() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { login } = useUser()
   const [error, setError] = useState(null)
 
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        // Verificar si hay un token en los query params (backend OAuth)
-        const token = searchParams.get('token')
-        if (token) {
-          localStorage.setItem('token', token)
-          window.location.href = '/'
-          return
-        }
-
         // Manejar callback de Supabase OAuth
+        // Supabase maneja automáticamente los tokens y los guarda de forma segura
         const { data, error: authError } = await supabase.auth.getSession()
 
         if (authError) {
-          console.error('Error al obtener sesión:', authError)
+          logger.error('Error al obtener sesión:', authError)
           setError('Error al autenticar. Por favor, intenta de nuevo.')
           setTimeout(() => navigate('/'), 3000)
           return
         }
 
         if (data?.session) {
-          const { access_token } = data.session
-
-          // Guardar el token de Supabase
-          localStorage.setItem('token', access_token)
-          localStorage.setItem('supabase_token', access_token)
-
+          // Supabase ya maneja los tokens automáticamente
+          // No necesitamos guardarlos manualmente en localStorage
+          logger.log('✅ Autenticación exitosa')
+          
           // Redirigir al home
           window.location.href = '/'
         } else {
-          // No hay sesión, redirigir al home
+          // Verificar si hay un código de autorización en la URL (OAuth)
+          const code = searchParams.get('code')
+          if (code) {
+            // Supabase manejará el intercambio del código automáticamente
+            // Solo esperamos un momento para que procese
+            logger.log('Procesando código de autorización...')
+            setTimeout(() => {
+              window.location.href = '/'
+            }, 1000)
+            return
+          }
+          
+          // No hay sesión ni código, redirigir al home
           setError('No se pudo autenticar. Por favor, intenta de nuevo.')
           setTimeout(() => navigate('/'), 3000)
         }
       } catch (error) {
-        console.error('Error en callback de autenticación:', error)
+        logger.error('Error en callback de autenticación:', error)
         setError('Error al autenticar. Por favor, intenta de nuevo.')
         setTimeout(() => navigate('/'), 3000)
       }

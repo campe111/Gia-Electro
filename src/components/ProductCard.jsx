@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom'
 import { ShoppingCartIcon, HeartIcon } from '@heroicons/react/24/outline'
 import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid'
 import { useCart } from '../context/CartContext'
+import { useUser } from '../context/UserContext'
 import { getPlaceholderImage } from '../utils/imageHelper'
+import toast from 'react-hot-toast'
 
 function ProductCard({ product, enableContainer = false }) {
   const { id, name, price, image, category, description } = product
@@ -19,13 +21,18 @@ function ProductCard({ product, enableContainer = false }) {
       ? (product.previousPrice ?? product.originalPrice)
       : null
   const { addToCart, isInCart } = useCart()
+  const { isAuthenticated } = useUser()
   const inCart = isInCart(id)
 
-  // Cargar favoritos desde localStorage
+  // Cargar favoritos desde localStorage solo si el usuario está autenticado
   useEffect(() => {
+    if (isAuthenticated) {
     const favorites = JSON.parse(localStorage.getItem('giaElectroFavorites') || '[]')
     setIsFavorite(favorites.includes(id))
-  }, [id])
+    } else {
+      setIsFavorite(false)
+    }
+  }, [id, isAuthenticated])
 
   const handleAddToCart = (e) => {
     e.preventDefault()
@@ -45,13 +52,30 @@ function ProductCard({ product, enableContainer = false }) {
     e.preventDefault()
     e.stopPropagation()
     
+    // Solo permitir agregar favoritos si el usuario está autenticado
+    if (!isAuthenticated) {
+      toast.error('Debes iniciar sesión para agregar productos a favoritos', {
+        duration: 3000,
+        icon: '🔒',
+      })
+      return
+    }
+    
     const favorites = JSON.parse(localStorage.getItem('giaElectroFavorites') || '[]')
     let newFavorites
     
     if (isFavorite) {
       newFavorites = favorites.filter((favId) => favId !== id)
+      toast.success('Producto eliminado de favoritos', {
+        duration: 2000,
+        icon: '❤️',
+      })
     } else {
       newFavorites = [...favorites, id]
+      toast.success('Producto agregado a favoritos', {
+        duration: 2000,
+        icon: '❤️',
+      })
     }
     
     localStorage.setItem('giaElectroFavorites', JSON.stringify(newFavorites))

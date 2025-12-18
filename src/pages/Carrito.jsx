@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
 import { supabase } from '../config/supabase'
@@ -12,6 +12,10 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline'
 import { getPlaceholderImage } from '../utils/imageHelper'
+import { generateCaptcha, validateCaptcha } from '../utils/captcha'
+import { logSecurityEvent, SecurityEventType, detectSuspiciousInput } from '../utils/securityMonitor'
+import { logger } from '../utils/logger'
+import { generateSecureOrderId, validateAndRecalculateTotal } from '../utils/securityUtils'
 
 function Carrito() {
   const navigate = useNavigate()
@@ -40,12 +44,42 @@ function Carrito() {
     country: 'Argentina',
   })
   const [errors, setErrors] = useState({})
+  const [captcha, setCaptcha] = useState(null)
+  const [captchaAnswer, setCaptchaAnswer] = useState('')
+
+  // Generar CAPTCHA al abrir el modal
+  useEffect(() => {
+    if (showModal) {
+      const newCaptcha = generateCaptcha()
+      setCaptcha(newCaptcha)
+      setCaptchaAnswer('')
+    }
+  }, [showModal])
+
+  // Sanitización básica para prevenir XSS
+  const sanitizeInput = (input) => {
+    if (typeof input !== 'string') return input
+    
+    // Detectar inputs sospechosos
+    if (detectSuspiciousInput(input)) {
+      logSecurityEvent(SecurityEventType.SUSPICIOUS_INPUT, {
+        source: 'Carrito',
+        inputLength: input.length,
+      })
+    }
+    
+    return input
+      .replace(/[<>]/g, '')
+      .replace(/javascript:/gi, '')
+      .replace(/on\w+=/gi, '')
+  }
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
+    const sanitizedValue = sanitizeInput(value)
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: sanitizedValue,
     }))
     // Limpiar error del campo
     if (errors[name]) {
@@ -97,11 +131,46 @@ function Carrito() {
       return
     }
 
+    // Validar CAPTCHA
+    if (!captcha || !validateCaptcha(captchaAnswer, captcha.answer)) {
+      setErrors({ captcha: 'Por favor, resuelve correctamente el desafío matemático' })
+      // Generar nuevo CAPTCHA
+      const newCaptcha = generateCaptcha()
+      setCaptcha(newCaptcha)
+      setCaptchaAnswer('')
+      logSecurityEvent(SecurityEventType.SUSPICIOUS_INPUT, {
+        source: 'Carrito',
+        reason: 'CAPTCHA fallido',
+      })
+      return
+    }
+
     setIsProcessing(true)
+    
+    // Registrar evento de seguridad
+    logSecurityEvent(SecurityEventType.ADMIN_ACTION, {
+      action: 'ORDER_CREATED',
+      source: 'Carrito',
+    })
 
     try {
-      // Generar ID de orden único
-      const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+      // Validar y recalcular total para prevenir manipulación de precios
+      const totalValidation = validateAndRecalculateTotal(cartItems, totalPrice)
+      if (!totalValidation.isValid) {
+        logger.error('Validación de precio fallida:', totalValidation.error)
+        logSecurityEvent(SecurityEventType.SUSPICIOUS_ACTIVITY, {
+          action: 'PRICE_MANIPULATION_ATTEMPT',
+          details: totalValidation.error,
+        })
+        alert('Error de validación: Los precios no coinciden. Por favor, recarga la página e intenta de nuevo.')
+        return
+      }
+
+      // Usar el total recalculado (más seguro)
+      const validatedTotal = totalValidation.calculatedTotal
+
+      // Generar ID de orden único y seguro
+      const orderId = generateSecureOrderId()
 
       // Crear objeto de orden
       const order = {
@@ -120,7 +189,7 @@ function Carrito() {
           country: formData.country.trim(),
         },
         items: cartItems,
-        total: totalPrice,
+        total: validatedTotal,
         paymentMethod: 'email', // Indicar que el pago se procesará por email
         date: new Date().toISOString(),
         status: 'pending',
@@ -135,7 +204,7 @@ function Carrito() {
             customer_data: order.customer,
             shipping_data: order.shipping,
             items: cartItems,
-            total: totalPrice,
+            total: validatedTotal, // Usar total validado
             status: 'pending',
             payment_status: 'pending',
             payment_data: {
@@ -150,10 +219,10 @@ function Carrito() {
       // Enviar email con los detalles del pedido a Gia Electro
       try {
         await sendOrderEmail(order)
-        console.log('Email de pedido enviado exitosamente')
+        logger.log('Email de pedido enviado exitosamente')
       } catch (emailError) {
         // No bloquear el proceso si el email falla
-        console.error('Error enviando email (no crítico):', emailError)
+        logger.error('Error enviando email (no crítico):', emailError)
       }
 
       // Limpiar carrito
@@ -163,7 +232,7 @@ function Carrito() {
       setShowModal(false)
       navigate(`/confirmacion/${orderId}`, { state: { order } })
     } catch (error) {
-      console.error('Error procesando el pedido:', error)
+      logger.error('Error procesando el pedido:', error)
       setErrors({ submit: 'Error procesando el pedido. Por favor intenta nuevamente.' })
       setIsProcessing(false)
     }
@@ -560,6 +629,49 @@ function Carrito() {
                   className="w-full px-4 py-3 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
                 />
               </div>
+
+              {/* CAPTCHA */}
+              {captcha && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <label htmlFor="captcha" className="block text-sm font-medium text-gray-700 mb-2">
+                    Verificación de seguridad *
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg font-bold text-primary-red bg-white px-4 py-2 rounded border border-gray-300">
+                      {captcha.question} = ?
+                    </span>
+                    <input
+                      type="number"
+                      id="captcha"
+                      value={captchaAnswer}
+                      onChange={(e) => setCaptchaAnswer(e.target.value)}
+                      className={`flex-1 px-4 py-2 bg-white rounded-lg border ${
+                        errors.captcha ? 'border-red-500' : 'border-gray-300'
+                      } focus:outline-none focus:ring-2 focus:ring-primary-yellow`}
+                      placeholder="Respuesta"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newCaptcha = generateCaptcha()
+                        setCaptcha(newCaptcha)
+                        setCaptchaAnswer('')
+                      }}
+                      className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
+                      title="Generar nuevo desafío"
+                    >
+                      🔄
+                    </button>
+                  </div>
+                  {errors.captcha && (
+                    <p className="text-red-500 text-sm mt-1">{errors.captcha}</p>
+                  )}
+                  <p className="text-xs text-gray-500 mt-2">
+                    Resuelve el desafío matemático para verificar que eres humano
+                  </p>
+                </div>
+              )}
 
               {errors.submit && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">

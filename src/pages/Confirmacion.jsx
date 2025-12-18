@@ -20,17 +20,39 @@ function Confirmacion() {
         return
       }
 
-      // Si no, buscar en Supabase
+      // Si no, buscar en Supabase con verificación de permisos
       try {
+        // Verificar si el usuario está autenticado
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        // Intentar obtener la orden (las políticas RLS controlarán el acceso)
         const { data, error } = await supabase
           .from('orders')
           .select('*')
           .eq('id', orderId)
           .single()
 
-        if (error) throw error
+        if (error) {
+          // Si es error de permisos, no mostrar la orden
+          if (error.code === 'PGRST301' || error.message.includes('permission') || error.message.includes('policy')) {
+            setOrder(null)
+            return
+          }
+          throw error
+        }
 
+        // Verificar que el usuario tiene permiso para ver esta orden
         if (data) {
+          // Si la orden tiene user_id, verificar que el usuario es el dueño o admin
+          if (data.user_id && session?.user?.id !== data.user_id) {
+            // Verificar si es admin
+            const isAdmin = session?.user?.email === 'giaelectro32@gmail.com'
+            if (!isAdmin) {
+              setOrder(null)
+              return
+            }
+          }
+          
           // Mapear formato de DB a formato de componente
           setOrder({
             id: data.id,
@@ -46,6 +68,7 @@ function Confirmacion() {
         }
       } catch (error) {
         console.error('Error buscando orden:', error)
+        setOrder(null)
       }
     }
 
@@ -61,8 +84,11 @@ function Confirmacion() {
       <div className="py-12 bg-gray-50 min-h-screen">
         <div className="container mx-auto px-4">
           <div className="max-w-2xl mx-auto text-center py-20">
-            <p className="text-gray-600 text-xl">
+            <p className="text-gray-600 text-xl mb-2">
               No se encontró la orden solicitada
+            </p>
+            <p className="text-gray-500 text-sm mb-6">
+              La orden no existe o no tienes permisos para verla
             </p>
             <Link to="/catalogo" className="btn-primary mt-6 inline-block">
               Ir al Catálogo

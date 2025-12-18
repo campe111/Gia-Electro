@@ -1,12 +1,27 @@
 import { createContext, useContext, useState, useEffect, useMemo } from 'react'
 import { supabase } from '../config/supabase'
+import { logger } from '../utils/logger'
+import { checkRateLimit, recordFailedAttempt, resetFailedAttempts, getRemainingAttempts } from '../utils/rateLimiter'
+import { logSecurityEvent, SecurityEventType } from '../utils/securityMonitor'
+
+const MAX_LOGIN_ATTEMPTS = 5
 
 const UserContext = createContext()
 
 export const useUser = () => {
   const context = useContext(UserContext)
   if (!context) {
-    throw new Error('useUser debe ser usado dentro de un UserProvider')
+    // Retornar valores por defecto en lugar de lanzar error
+    // Esto previene crashes durante hot reload o cuando el provider no está disponible
+    logger.warn('useUser se está usando fuera de UserProvider, retornando valores por defecto')
+    return {
+      isAuthenticated: false,
+      user: null,
+      isLoading: false,
+      register: async () => ({ success: false, error: 'UserProvider no disponible' }),
+      login: async () => ({ success: false, error: 'UserProvider no disponible' }),
+      logout: async () => ({ success: false, error: 'UserProvider no disponible' }),
+    }
   }
   return context
 }
@@ -50,12 +65,12 @@ export const UserProvider = ({ children }) => {
         .single()
 
       if (error) {
-        console.warn('Error fetching profile:', error.message)
+        logger.warn('Error fetching profile:', error.message)
       }
 
       setProfile(data)
     } catch (error) {
-      console.error('Error fetching profile:', error)
+      logger.error('Error fetching profile:', error)
     } finally {
       setIsLoading(false)
     }
@@ -85,14 +100,52 @@ export const UserProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
+      // Verificar rate limiting antes de intentar login
+      const rateLimitCheck = checkRateLimit(email)
+      if (rateLimitCheck.isLocked) {
+        return { 
+          success: false, 
+          error: rateLimitCheck.error || 'Demasiados intentos fallidos. Intenta más tarde.' 
+        }
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
-      if (error) throw error
+      if (error) {
+        // Registrar intento fallido
+        recordFailedAttempt(email)
+        const remainingAttempts = getRemainingAttempts(email)
+        
+        // Registrar evento de seguridad
+        logSecurityEvent(SecurityEventType.LOGIN_FAILED, {
+          email,
+          reason: error.message,
+          remainingAttempts,
+        })
+        
+        let errorMessage = error.message || 'Credenciales inválidas'
+        if (remainingAttempts > 0 && remainingAttempts < MAX_LOGIN_ATTEMPTS) {
+          errorMessage += ` (${remainingAttempts} ${remainingAttempts === 1 ? 'intento' : 'intentos'} restantes)`
+        }
+        
+        return { success: false, error: errorMessage }
+      }
+
+      // Login exitoso, resetear intentos fallidos
+      resetFailedAttempts(email)
+      
+      // Registrar evento de seguridad
+      logSecurityEvent(SecurityEventType.LOGIN_SUCCESS, {
+        email,
+        userType: 'user',
+      })
+      
       return { success: true, data }
     } catch (error) {
+      recordFailedAttempt(email)
       return {
         success: false,
         error: error.message,
@@ -102,10 +155,24 @@ export const UserProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      // Limpiar estado local primero para feedback inmediato
+      setUser(null)
+      setProfile(null)
+      
+      // Luego cerrar sesión en Supabase
       const { error } = await supabase.auth.signOut()
-      if (error) throw error
+      if (error) {
+        logger.error('Error al cerrar sesión en Supabase:', error)
+        // Aún así retornar éxito para que la UI se actualice
+        return { success: true, error: error.message }
+      }
+      return { success: true }
     } catch (error) {
-      console.error('Error al cerrar sesión:', error)
+      logger.error('Error al cerrar sesión:', error)
+      // Aún así limpiar el estado local
+      setUser(null)
+      setProfile(null)
+      return { success: true, error: error.message }
     }
   }
 
