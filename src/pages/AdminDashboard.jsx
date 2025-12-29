@@ -1874,32 +1874,46 @@ function ProductManagementSection() {
   }
 
   const confirmExcelUpload = () => {
-    // Agregar productos nuevos a los existentes, evitando duplicados por ID
-    const existingIds = new Set(products.map(p => String(p.id)))
-    const newProducts = excelPreviewData.filter(p => !existingIds.has(String(p.id)))
-    const updatedProducts = [...products, ...newProducts]
+    // Leer productos existentes desde localStorage para asegurarnos de tener todos
+    const savedProducts = localStorage.getItem('giaElectroProducts')
+    const existingProducts = savedProducts ? JSON.parse(savedProducts) : []
     
-    // Si hay productos con IDs duplicados, actualizar los existentes con los nuevos datos
-    const mergedProducts = [...products]
+    console.log('📦 Productos existentes desde localStorage:', existingProducts.length)
+    console.log('📦 Productos del Excel:', excelPreviewData.length)
+    console.log('📦 IDs existentes:', existingProducts.map(p => p.id))
+    console.log('📦 IDs del Excel:', excelPreviewData.map(p => p.id))
+    
+    // Empezar con todos los productos existentes
+    const mergedProducts = [...existingProducts]
+    
+    // Procesar cada producto del Excel
     excelPreviewData.forEach(newProduct => {
       const existingIndex = mergedProducts.findIndex(p => String(p.id) === String(newProduct.id))
       if (existingIndex >= 0) {
         // Actualizar producto existente
+        console.log(`🔄 Actualizando producto ID ${newProduct.id}`)
         mergedProducts[existingIndex] = newProduct
       } else {
         // Agregar nuevo producto
+        console.log(`➕ Agregando nuevo producto ID ${newProduct.id}`)
         mergedProducts.push(newProduct)
       }
     })
     
+    console.log('📦 Total de productos después del merge:', mergedProducts.length)
+    
+    // Guardar y actualizar estado
     setProducts(mergedProducts)
     localStorage.setItem('giaElectroProducts', JSON.stringify(mergedProducts))
     
     // Disparar evento para actualizar
     window.dispatchEvent(new Event('storage'))
     
-    const addedCount = newProducts.length
+    const addedCount = excelPreviewData.filter(p => 
+      !existingProducts.some(existing => String(existing.id) === String(p.id))
+    ).length
     const updatedCount = excelPreviewData.length - addedCount
+    
     let message = `✅ ${excelPreviewData.length} productos procesados`
     if (addedCount > 0) message += ` (${addedCount} nuevos)`
     if (updatedCount > 0) message += ` (${updatedCount} actualizados)`
