@@ -98,12 +98,7 @@ export const useProducts = () => {
           setTimeout(() => {
             try {
               productsChannelRef.current = supabaseInstanceRef.current
-                .channel('products-changes', {
-                  config: {
-                    broadcast: { self: true },
-                    presence: { key: '' }
-                  }
-                })
+                .channel('products-changes')
                 .on('postgres_changes', 
                   { 
                     event: '*', 
@@ -120,17 +115,21 @@ export const useProducts = () => {
                   if (status === 'SUBSCRIBED') {
                     console.log('✅ Suscrito a cambios de productos en Supabase Realtime')
                   } else if (status === 'CHANNEL_ERROR') {
-                    console.warn('⚠️ Error al suscribirse a Realtime:', err)
-                    // No es crítico, la app seguirá funcionando sin Realtime
+                    // Silenciar el error conocido de mismatch si Realtime no está completamente configurado
+                    if (err && !err.message?.includes('mismatch')) {
+                      console.warn('⚠️ Error al suscribirse a Realtime:', err)
+                    }
                   } else if (status === 'TIMED_OUT') {
                     console.warn('⚠️ Timeout al suscribirse a Realtime')
                   } else if (status === 'CLOSED') {
-                    console.warn('⚠️ Canal de Realtime cerrado')
+                    console.debug('⚠️ Canal de Realtime cerrado')
                   }
                 })
             } catch (error) {
-              console.warn('Error al crear suscripción de Realtime:', error)
-              // No es crítico, la aplicación seguirá funcionando sin Realtime
+              // Silenciar errores conocidos de mismatch
+              if (!error.message?.includes('mismatch')) {
+                console.warn('Error al crear suscripción de Realtime:', error)
+              }
             }
           }, 1000) // Esperar 1 segundo antes de suscribirse
         }
