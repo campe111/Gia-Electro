@@ -13,40 +13,46 @@ function AdminLogin() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    e.stopPropagation() // Prevenir propagación del evento en móviles
     setError('')
     setIsLoading(true)
 
-    // Simular delay de autenticación
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    try {
+      // Esperar correctamente la función async
+      const result = await login(email, password)
 
-    const result = login(email, password)
-
-    if (result.success) {
-      navigate('/admin/dashboard')
-    } else {
-      setError(result.error || 'Error al iniciar sesión')
+      if (result.success) {
+        // Pequeño delay para asegurar que el estado se actualice
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        navigate('/admin/dashboard')
+      } else {
+        setError(result.error || 'Error al iniciar sesión')
+        setIsLoading(false)
+      }
+    } catch (error) {
+      console.error('Error en login:', error)
+      setError('Error al iniciar sesión. Por favor, intenta de nuevo.')
+      setIsLoading(false)
     }
-
-    setIsLoading(false)
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-primary-black via-gray-900 to-primary-black flex items-center justify-center py-12 px-4">
+    <div className="min-h-screen bg-gradient-to-r from-primary-black via-gray-900 to-primary-black flex items-center justify-center py-4 sm:py-12 px-4">
       <div className="max-w-md w-full">
-        <div className="bg-white rounded-lg shadow-xl p-8">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-red rounded-full mb-4">
-              <LockClosedIcon className="h-8 w-8 text-white" />
+        <div className="bg-white rounded-lg shadow-xl p-4 sm:p-6 md:p-8">
+          <div className="text-center mb-6 sm:mb-8">
+            <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 bg-primary-red rounded-full mb-3 sm:mb-4">
+              <LockClosedIcon className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-primary-black mb-2">
+            <h1 className="text-2xl sm:text-3xl font-bold text-primary-black mb-2">
               Panel de Administración
             </h1>
-            <p className="text-gray-600">Inicia sesión para continuar</p>
+            <p className="text-sm sm:text-base text-gray-600">Inicia sesión para continuar</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6" noValidate>
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+              <div className="bg-red-50 border border-red-200 text-red-700 px-3 sm:px-4 py-2 sm:py-3 rounded text-sm sm:text-base">
                 {error}
               </div>
             )}
@@ -63,9 +69,13 @@ function AdminLogin() {
                 id="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow focus:border-transparent"
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow focus:border-transparent text-base"
                 placeholder="giaelectro32@gmail.com"
+                autoComplete="email"
+                inputMode="email"
                 required
+                disabled={isLoading}
+                style={{ fontSize: '16px' }}
               />
             </div>
 
@@ -81,22 +91,32 @@ function AdminLogin() {
                 id="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow focus:border-transparent"
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow focus:border-transparent text-base"
                 placeholder="••••••••"
+                autoComplete="current-password"
                 required
+                disabled={isLoading}
+                style={{ fontSize: '16px' }}
               />
             </div>
 
             <button
               type="submit"
               disabled={isLoading}
-              className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed py-3 text-base font-semibold min-h-[48px] touch-manipulation active:scale-95 transition-transform"
+              style={{ 
+                WebkitTapHighlightColor: 'transparent',
+                touchAction: 'manipulation',
+                WebkitTouchCallout: 'none',
+                WebkitUserSelect: 'none',
+                userSelect: 'none'
+              }}
             >
               {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
             </button>
           </form>
 
-          <div className="mt-6 text-center">
+          <div className="mt-4 sm:mt-6 text-center">
             <p className="text-xs text-gray-500">
               Panel de Super Administración
             </p>
