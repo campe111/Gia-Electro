@@ -1585,6 +1585,7 @@ function ProductManagementSection() {
   })
   const [selectedImageFile, setSelectedImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
+  const [productSearchTerm, setProductSearchTerm] = useState('')
 
   useEffect(() => {
     loadProducts()
@@ -1873,13 +1874,37 @@ function ProductManagementSection() {
   }
 
   const confirmExcelUpload = () => {
-    setProducts(excelPreviewData)
-    localStorage.setItem('giaElectroProducts', JSON.stringify(excelPreviewData))
+    // Agregar productos nuevos a los existentes, evitando duplicados por ID
+    const existingIds = new Set(products.map(p => String(p.id)))
+    const newProducts = excelPreviewData.filter(p => !existingIds.has(String(p.id)))
+    const updatedProducts = [...products, ...newProducts]
+    
+    // Si hay productos con IDs duplicados, actualizar los existentes con los nuevos datos
+    const mergedProducts = [...products]
+    excelPreviewData.forEach(newProduct => {
+      const existingIndex = mergedProducts.findIndex(p => String(p.id) === String(newProduct.id))
+      if (existingIndex >= 0) {
+        // Actualizar producto existente
+        mergedProducts[existingIndex] = newProduct
+      } else {
+        // Agregar nuevo producto
+        mergedProducts.push(newProduct)
+      }
+    })
+    
+    setProducts(mergedProducts)
+    localStorage.setItem('giaElectroProducts', JSON.stringify(mergedProducts))
     
     // Disparar evento para actualizar
     window.dispatchEvent(new Event('storage'))
     
-    showToast.success(`✅ ${excelPreviewData.length} productos cargados exitosamente`)
+    const addedCount = newProducts.length
+    const updatedCount = excelPreviewData.length - addedCount
+    let message = `✅ ${excelPreviewData.length} productos procesados`
+    if (addedCount > 0) message += ` (${addedCount} nuevos)`
+    if (updatedCount > 0) message += ` (${updatedCount} actualizados)`
+    
+    showToast.success(message)
     setShowExcelPreview(false)
     setExcelPreviewData([])
   }
@@ -2148,6 +2173,35 @@ function ProductManagementSection() {
         </div>
       </div>
 
+      {/* Buscador/Filtro de Productos */}
+      <div className="bg-white rounded-lg shadow-md p-4">
+        <div className="flex items-center gap-4">
+          <div className="flex-1 relative">
+            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Buscar productos por nombre, marca, categoría o ID..."
+              value={productSearchTerm}
+              onChange={(e) => setProductSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-yellow focus:border-transparent"
+            />
+          </div>
+          {productSearchTerm && (
+            <button
+              onClick={() => setProductSearchTerm('')}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+            >
+              Limpiar
+            </button>
+          )}
+        </div>
+        {productSearchTerm && (
+          <p className="mt-2 text-sm text-gray-600">
+            Mostrando resultados para: <strong>"{productSearchTerm}"</strong>
+          </p>
+        )}
+      </div>
+
       {/* Lista de Productos */}
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
         {isLoading && products.length === 0 ? (
@@ -2157,26 +2211,54 @@ function ProductManagementSection() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-                  <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">Imagen</th>
-                  <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
-                  <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Categoría</th>
-                  <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Precio</th>
-                  <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {products.length === 0 ? (
-                  <tr>
-                    <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
-                      No hay productos. Sube un archivo Excel para comenzar.
-                    </td>
-                  </tr>
-                ) : (
-                  products.map((product) => (
+            {(() => {
+              // Filtrar productos basado en el término de búsqueda
+              const filteredProducts = productSearchTerm
+                ? products.filter(product => {
+                    const searchLower = productSearchTerm.toLowerCase()
+                    return (
+                      String(product.id).toLowerCase().includes(searchLower) ||
+                      (product.name && product.name.toLowerCase().includes(searchLower)) ||
+                      (product.brand && product.brand.toLowerCase().includes(searchLower)) ||
+                      (product.category && product.category.toLowerCase().includes(searchLower)) ||
+                      (product.description && product.description.toLowerCase().includes(searchLower))
+                    )
+                  })
+                : products
+
+              return (
+                <>
+                  {filteredProducts.length === 0 && products.length > 0 ? (
+                    <div className="p-8 text-center">
+                      <p className="text-gray-500">No se encontraron productos que coincidan con "{productSearchTerm}"</p>
+                      <button
+                        onClick={() => setProductSearchTerm('')}
+                        className="mt-4 text-primary-red hover:underline"
+                      >
+                        Limpiar búsqueda
+                      </button>
+                    </div>
+                  ) : (
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                          <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">Imagen</th>
+                          <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
+                          <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Categoría</th>
+                          <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Precio</th>
+                          <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredProducts.length === 0 ? (
+                          <tr>
+                            <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
+                              No hay productos. Sube un archivo Excel para comenzar.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredProducts.map((product) => (
                     <tr key={product.id} className="hover:bg-gray-50">
                       <td className="px-3 md:px-6 py-4 whitespace-nowrap text-sm">{product.id}</td>
                       <td className="px-3 md:px-6 py-4 whitespace-nowrap hidden sm:table-cell">
@@ -2276,12 +2358,16 @@ function ProductManagementSection() {
                         </button>
                       </div>
                     </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                          </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  )}
+                </>
+              )
+            })()}
+          </div>
         )}
       </div>
 
