@@ -28,64 +28,23 @@ export const useUser = () => {
 
 export const UserProvider = ({ children }) => {
   const [user, setUser] = useState(null)
-  const [profile, setProfile] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     // Verificar sesión actual
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
-      if (session?.user) {
-        fetchProfile(session.user.id)
-      } else {
-        setIsLoading(false)
-      }
+      setIsLoading(false)
     })
 
     // Escuchar cambios en la autenticación
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
-      if (session?.user) {
-        fetchProfile(session.user.id)
-      } else {
-        setProfile(null)
-        setIsLoading(false)
-      }
+      setIsLoading(false)
     })
 
     return () => subscription.unsubscribe()
   }, [])
-
-  const fetchProfile = async (userId) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single()
-
-      if (error) {
-        // Si la tabla no existe o hay un error 404, simplemente no establecer perfil
-        // Esto es normal si la tabla profiles no está configurada en Supabase
-        if (error.code === 'PGRST116' || error.message?.includes('Could not find the table')) {
-          // Tabla no existe, continuar sin perfil
-          setProfile(null)
-        } else {
-          logger.warn('Error fetching profile:', error.message)
-        }
-      } else {
-        setProfile(data)
-      }
-    } catch (error) {
-      // Silenciar errores de tabla no encontrada
-      if (!error.message?.includes('Could not find the table')) {
-        logger.error('Error fetching profile:', error)
-      }
-      setProfile(null)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   const register = async (name, email, password) => {
     try {
@@ -168,7 +127,6 @@ export const UserProvider = ({ children }) => {
     try {
       // Limpiar estado local primero para feedback inmediato
       setUser(null)
-      setProfile(null)
       
       // Luego cerrar sesión en Supabase
       const { error } = await supabase.auth.signOut()
@@ -182,21 +140,16 @@ export const UserProvider = ({ children }) => {
       logger.error('Error al cerrar sesión:', error)
       // Aún así limpiar el estado local
       setUser(null)
-      setProfile(null)
       return { success: true, error: error.message }
     }
   }
 
   // Función helper para extraer el nombre del usuario desde diferentes fuentes
-  // Se recalcula automáticamente cuando cambian user o profile
+  // Se recalcula automáticamente cuando cambia user
   const userDisplayName = useMemo(() => {
     if (!user) return null
 
-    // 1. Intentar obtener desde el perfil
-    if (profile?.full_name) return profile.full_name
-    if (profile?.name) return profile.name
-
-    // 2. Intentar obtener desde user_metadata (OAuth como Google)
+    // 1. Intentar obtener desde user_metadata (OAuth como Google o registro)
     // Google puede proporcionar el nombre en diferentes campos
     if (user.user_metadata?.full_name) return user.user_metadata.full_name
     if (user.user_metadata?.name) return user.user_metadata.name
@@ -206,7 +159,7 @@ export const UserProvider = ({ children }) => {
     }
     if (user.user_metadata?.first_name) return user.user_metadata.first_name
 
-    // 3. Extraer nombre del email como fallback
+    // 2. Extraer nombre del email como fallback
     if (user.email) {
       const emailName = user.email.split('@')[0]
       // Capitalizar primera letra
@@ -214,17 +167,16 @@ export const UserProvider = ({ children }) => {
     }
 
     return null
-  }, [user, profile])
+  }, [user])
 
   const userData = useMemo(() => {
     if (!user) return null
     return {
       ...user,
-      ...profile,
       name: userDisplayName, // Asegurar que siempre haya un campo 'name'
-      email: user?.email || profile?.email,
+      email: user?.email,
     }
-  }, [user, profile, userDisplayName])
+  }, [user, userDisplayName])
 
   const value = {
     isAuthenticated: !!user,

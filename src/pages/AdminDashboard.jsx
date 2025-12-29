@@ -1582,6 +1582,8 @@ function ProductManagementSection() {
     image: '',
     previousPrice: ''
   })
+  const [selectedImageFile, setSelectedImageFile] = useState(null)
+  const [imagePreview, setImagePreview] = useState(null)
 
   useEffect(() => {
     loadProducts()
@@ -1865,34 +1867,54 @@ function ProductManagementSection() {
     showToast.success('Producto agregado exitosamente')
   }
 
-  const handleImageUpload = async (e, productId) => {
+  const handleImageFileSelect = (e) => {
     const file = e.target.files[0]
-    if (!file) return
+    if (!file) {
+      setSelectedImageFile(null)
+      setImagePreview(null)
+      return
+    }
 
     // Validar tamaño del archivo
     const sizeValidation = validateFileSize(file, FILE_SIZE_LIMITS.IMAGE)
     if (!sizeValidation.isValid) {
       showToast.error(sizeValidation.error)
-      e.target.value = '' // Limpiar input
+      e.target.value = ''
+      setSelectedImageFile(null)
+      setImagePreview(null)
       return
     }
 
-    // Validar tipo de archivo (tipo MIME y extensión)
+    // Validar tipo de archivo
     const typeValidation = validateFileType(file, ALLOWED_IMAGE_TYPES, ALLOWED_IMAGE_EXTENSIONS)
     if (!typeValidation.isValid) {
       showToast.error(typeValidation.error)
-      e.target.value = '' // Limpiar input
+      e.target.value = ''
+      setSelectedImageFile(null)
+      setImagePreview(null)
       return
     }
+
+    // Guardar archivo y crear preview
+    setSelectedImageFile(file)
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      setImagePreview(event.target.result)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const confirmImageUpload = async () => {
+    if (!selectedImageFile || !selectedProduct) return
 
     setIsLoading(true)
     try {
       // Subir imagen a Supabase Storage
-      const imageUrl = await uploadProductImage(file, productId)
+      const imageUrl = await uploadProductImage(selectedImageFile, selectedProduct.id)
       
       // Actualizar producto con nueva URL de imagen
       const updatedProducts = products.map(p => 
-        p.id === productId 
+        p.id === selectedProduct.id 
           ? { ...p, image: imageUrl }
           : p
       )
@@ -1905,8 +1927,11 @@ function ProductManagementSection() {
       
       showToast.success('Imagen actualizada exitosamente')
       
+      // Limpiar estados
       setShowImageUpload(false)
       setSelectedProduct(null)
+      setSelectedImageFile(null)
+      setImagePreview(null)
       setIsLoading(false)
     } catch (error) {
       logger.error('Error subiendo imagen:', error)
@@ -2232,6 +2257,8 @@ function ProductManagementSection() {
                 onClick={() => {
                   setShowImageUpload(false)
                   setSelectedProduct(null)
+                  setSelectedImageFile(null)
+                  setImagePreview(null)
                 }}
                 className="text-gray-500 hover:text-gray-700"
               >
@@ -2247,7 +2274,7 @@ function ProductManagementSection() {
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={(e) => handleImageUpload(e, selectedProduct.id)}
+                  onChange={handleImageFileSelect}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-yellow"
                   disabled={isLoading}
                 />
@@ -2256,7 +2283,20 @@ function ProductManagementSection() {
                 </p>
               </div>
 
-              {selectedProduct.image && (
+              {/* Vista previa de la nueva imagen seleccionada */}
+              {imagePreview && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Vista Previa:</p>
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    className="w-full h-48 object-contain border border-gray-300 rounded"
+                  />
+                </div>
+              )}
+
+              {/* Imagen actual del producto */}
+              {selectedProduct.image && !imagePreview && (
                 <div>
                   <p className="text-sm font-medium text-gray-700 mb-2">Imagen Actual:</p>
                   <img
@@ -2270,15 +2310,28 @@ function ProductManagementSection() {
                 </div>
               )}
 
-              <button
-                onClick={() => {
-                  setShowImageUpload(false)
-                  setSelectedProduct(null)
-                }}
-                className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-              >
-                Cerrar
-              </button>
+              {/* Botones */}
+              <div className="flex gap-4 pt-4 border-t">
+                <button
+                  onClick={() => {
+                    setShowImageUpload(false)
+                    setSelectedProduct(null)
+                    setSelectedImageFile(null)
+                    setImagePreview(null)
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-semibold"
+                  disabled={isLoading}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmImageUpload}
+                  disabled={isLoading || !selectedImageFile}
+                  className="flex-1 px-4 py-2 bg-primary-red text-white rounded-lg hover:bg-red-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? 'Subiendo...' : 'Subir Imagen'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
