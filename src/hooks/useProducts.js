@@ -17,6 +17,10 @@ export const useProducts = () => {
     return []
   })
 
+  // Los hooks deben estar en el nivel superior del componente
+  const productsChannelRef = useRef(null)
+  const supabaseInstanceRef = useRef(null)
+
   useEffect(() => {
     // Cargar productos desde Supabase primero, luego localStorage como respaldo
     const loadProducts = async () => {
@@ -85,9 +89,6 @@ export const useProducts = () => {
     }
     
     // Escuchar cambios en Supabase usando Realtime
-    const productsChannelRef = useRef(null)
-    const supabaseInstanceRef = useRef(null)
-    
     // Cargar supabase de forma dinámica para evitar errores si no está configurado
     import('../config/supabase')
       .then((module) => {
