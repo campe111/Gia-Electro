@@ -1709,25 +1709,42 @@ function ProductManagementSection() {
           
           logger.log('Datos leídos:', jsonData.length, 'filas')
           logger.log('Primera fila de ejemplo:', jsonData[0])
+          
+          console.log('🔍 Iniciando validación de datos...')
+          console.log('🔍 Datos completos del JSON:', jsonData)
 
           // Validar límite de filas
           if (jsonData.length > MAX_EXCEL_ROWS) {
+            console.error('❌ Error: Demasiadas filas')
             throw new Error(`El archivo tiene demasiadas filas (${jsonData.length}). Máximo permitido: ${MAX_EXCEL_ROWS} filas.`)
           }
+          console.log('✅ Validación de límite de filas pasada')
 
           // Validar datos primero
+          console.log('🔍 Validando filas...')
           const validationErrors = []
           jsonData.forEach((row, index) => {
-            if (!row.Nombre && !row.name && !row.Producto && !row.Nombre_Producto) {
+            console.log(`🔍 Validando fila ${index + 2}:`, row)
+            console.log(`🔍 Campos disponibles en fila ${index + 2}:`, Object.keys(row))
+            
+            const hasName = row.Nombre || row.name || row.Producto || row.Nombre_Producto
+            console.log(`🔍 ¿Tiene nombre? ${hasName ? 'Sí' : 'No'}`, { Nombre: row.Nombre, name: row.name, Producto: row.Producto, Nombre_Producto: row.Nombre_Producto })
+            
+            if (!hasName) {
               validationErrors.push(`Fila ${index + 2}: Falta el nombre del producto`)
             }
+            
             const price = parseFloat(row.Precio || row.price || row.PRECIO || 0)
+            console.log(`🔍 Precio en fila ${index + 2}:`, { Precio: row.Precio, price: row.price, PRECIO: row.PRECIO, parsed: price })
+            
             if (!price || price <= 0) {
               validationErrors.push(`Fila ${index + 2}: Precio inválido`)
             }
           })
 
+          console.log('🔍 Errores de validación encontrados:', validationErrors.length)
           if (validationErrors.length > 0) {
+            console.error('❌ Errores de validación:', validationErrors)
             setUploadStatus({
               type: 'error',
               message: `Errores de validación:\n${validationErrors.slice(0, 5).join('\n')}${validationErrors.length > 5 ? `\n... y ${validationErrors.length - 5} más` : ''}`
@@ -1735,6 +1752,7 @@ function ProductManagementSection() {
             setIsLoading(false)
             return
           }
+          console.log('✅ Validación de datos pasada')
 
           // Función de validación y sanitización de datos del producto
           const validateAndSanitizeProduct = (product, index) => {
@@ -1774,6 +1792,7 @@ function ProductManagementSection() {
           }
 
           // Procesar datos
+          console.log('🔄 Iniciando procesamiento de productos...')
           const processedProducts = jsonData.map((row, index) => {
             // Mapear columnas del Excel a la estructura del producto
             const productId = row.ID || row.id || row.Id || (index + 1)
@@ -1800,14 +1819,22 @@ function ProductManagementSection() {
             return validateAndSanitizeProduct(product, index)
           }).filter(p => p.name && p.price > 0)
 
+          console.log('✅ Productos procesados:', processedProducts.length)
+          if (processedProducts.length > 0) {
+            console.log('📦 Primer producto procesado:', processedProducts[0])
+          }
+
           if (processedProducts.length === 0) {
+            console.error('❌ No se encontraron productos válidos')
             throw new Error('No se encontraron productos válidos en el archivo Excel')
           }
 
           // Mostrar preview antes de confirmar
+          console.log('👁️ Mostrando preview...')
           setExcelPreviewData(processedProducts)
           setShowExcelPreview(true)
           setIsLoading(false)
+          console.log('✅ Preview configurado, modal debería mostrarse')
           
           // Limpiar input
           e.target.value = ''
