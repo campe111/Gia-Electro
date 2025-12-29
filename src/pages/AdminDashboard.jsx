@@ -2074,31 +2074,37 @@ function ProductManagementSection() {
   }
 
   const confirmDeleteProduct = async () => {
-    if (!productToDelete) return
+    if (!productToDelete) {
+      setShowDeleteConfirm(false)
+      return
+    }
 
+    // Obtener el ID para comparar correctamente
+    const productIdToDelete = String(productToDelete)
+    console.log('🗑️ Eliminando producto:', productIdToDelete)
+    
     try {
-      // Eliminar de Supabase
+      // Eliminar de Supabase primero
       const { deleteProductFromSupabase } = await import('../utils/productStorage')
-      await deleteProductFromSupabase(productToDelete)
+      console.log('🗑️ Eliminando de Supabase...')
+      await deleteProductFromSupabase(productIdToDelete)
+      console.log('✅ Eliminado de Supabase')
       
-      // Actualizar estado local
-      const updatedProducts = products.filter(p => p.id !== productToDelete)
-      setProducts(updatedProducts)
-      localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
+      // Actualizar estado local - remover el producto eliminado
+      const updatedProducts = products.filter(p => String(p.id) !== productIdToDelete)
+      console.log('🗑️ Productos actualizados:', updatedProducts.length)
       
-      // Notificar actualización
-      window.dispatchEvent(new CustomEvent('productsUpdated', { 
-        detail: { products: updatedProducts } 
-      }))
-      window.dispatchEvent(new Event('storage'))
+      // Guardar la lista actualizada usando saveProductsAndNotify
+      await saveProductsAndNotify(updatedProducts)
+      console.log('✅ Productos guardados y notificados')
       
       showToast.success('Producto eliminado exitosamente')
     } catch (error) {
+      console.error('❌ Error eliminando producto:', error)
       logger.error('Error eliminando producto:', error)
       // Si falla Supabase, eliminar solo localmente
-      const updatedProducts = products.filter(p => p.id !== productToDelete)
-      setProducts(updatedProducts)
-      localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
+      const updatedProducts = products.filter(p => String(p.id) !== productIdToDelete)
+      await saveProductsAndNotify(updatedProducts)
       showToast.error('Error al sincronizar con Supabase. El producto se eliminó localmente.')
     } finally {
       setShowDeleteConfirm(false)
@@ -3027,7 +3033,12 @@ function ProductManagementSection() {
                   Cancelar
                 </button>
                 <button
-                  onClick={confirmDeleteProduct}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    confirmDeleteProduct()
+                  }}
                   className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
                 >
                   Eliminar
