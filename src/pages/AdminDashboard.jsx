@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAdmin, isAdminUser } from '../context/AdminContext'
 import { supabase } from '../config/supabase'
@@ -1567,6 +1567,7 @@ function ProductManagementSection() {
   const [showImageUpload, setShowImageUpload] = useState(false)
   const [showExcelPreview, setShowExcelPreview] = useState(false)
   const [excelPreviewData, setExcelPreviewData] = useState([])
+  const excelFileInputRef = useRef(null)
   const [editingProduct, setEditingProduct] = useState(null)
   const [categories, setCategories] = useState([])
   const [brands, setBrands] = useState([])
@@ -1617,22 +1618,44 @@ function ProductManagementSection() {
 
   const handleExcelUpload = async (e) => {
     const file = e.target.files[0]
-    if (!file) return
+    
+    // Agregar logging para debug
+    logger.log('Archivo seleccionado:', file?.name)
+    logger.log('Tipo MIME:', file?.type)
+    logger.log('Tamaño:', file?.size, 'bytes')
+    
+    if (!file) {
+      logger.warn('No se seleccionó ningún archivo')
+      return
+    }
 
     // Validar tamaño del archivo
     const sizeValidation = validateFileSize(file, FILE_SIZE_LIMITS.EXCEL)
     if (!sizeValidation.isValid) {
+      logger.error('Error de tamaño:', sizeValidation.error)
       showToast.error(sizeValidation.error)
       e.target.value = '' // Limpiar input
       return
     }
 
-    // Validar tipo de archivo
-    const typeValidation = validateFileType(file, ALLOWED_EXCEL_TYPES, ALLOWED_EXCEL_EXTENSIONS)
-    if (!typeValidation.isValid) {
-      showToast.error(typeValidation.error)
-      e.target.value = '' // Limpiar input
+    // Validar tipo de archivo - Hacer más flexible
+    const fileExtension = '.' + file.name.split('.').pop().toLowerCase()
+    const isValidExtension = ALLOWED_EXCEL_EXTENSIONS.includes(fileExtension)
+    const isValidMimeType = !file.type || ALLOWED_EXCEL_TYPES.includes(file.type) || file.type === 'application/octet-stream'
+    
+    logger.log('Validación:', { fileExtension, isValidExtension, mimeType: file.type, isValidMimeType })
+    
+    if (!isValidExtension) {
+      const error = `Extensión de archivo no permitida. Extensión recibida: ${fileExtension}. Extensiones permitidas: ${ALLOWED_EXCEL_EXTENSIONS.join(', ')}`
+      logger.error('Error de extensión:', error)
+      showToast.error(error)
+      e.target.value = ''
       return
+    }
+    
+    // Si el tipo MIME no coincide pero la extensión es válida, continuar (algunos Excel tienen tipos MIME diferentes)
+    if (!isValidMimeType && file.type) {
+      logger.warn('Tipo MIME no reconocido pero extensión válida:', file.type, 'Continuando...')
     }
 
     setIsLoading(true)
@@ -1644,10 +1667,14 @@ function ProductManagementSection() {
 
       reader.onload = (event) => {
         try {
+          logger.log('Leyendo archivo Excel...')
           const data = new Uint8Array(event.target.result)
           const workbook = XLSX.read(data, { type: 'array' })
           const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
           const jsonData = XLSX.utils.sheet_to_json(firstSheet)
+          
+          logger.log('Datos leídos:', jsonData.length, 'filas')
+          logger.log('Primera fila de ejemplo:', jsonData[0])
 
           // Validar límite de filas
           if (jsonData.length > MAX_EXCEL_ROWS) {
@@ -1986,7 +2013,15 @@ function ProductManagementSection() {
               <PlusIcon className="h-5 w-5" />
               <span>Agregar Producto</span>
             </button>
-            <label className="px-4 py-2 bg-primary-yellow text-primary-black rounded-lg hover:bg-yellow-500 transition-colors font-semibold cursor-pointer flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+            <button
+              type="button"
+              onClick={() => {
+                logger.log('Botón Subir Excel clickeado')
+                excelFileInputRef.current?.click()
+              }}
+              disabled={isLoading}
+              className="px-4 py-2 bg-primary-yellow text-primary-black rounded-lg hover:bg-yellow-500 transition-colors font-semibold cursor-pointer flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               {isLoading ? (
                 <>
                   <span className="animate-spin">⏳</span>
@@ -1998,14 +2033,15 @@ function ProductManagementSection() {
                   <span>Subir Excel</span>
                 </>
               )}
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleExcelUpload}
-                className="hidden"
-                disabled={isLoading}
-              />
-            </label>
+            </button>
+            <input
+              ref={excelFileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleExcelUpload}
+              className="hidden"
+              disabled={isLoading}
+            />
             <button
               onClick={() => setShowCategoryManager(!showCategoryManager)}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold flex items-center gap-2"
