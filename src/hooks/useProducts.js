@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { products as defaultProducts } from '../data/products'
+import { loadProductsFromSupabase } from '../utils/productStorage'
+import { supabase } from '../config/supabase'
 
 // Cache en memoria para evitar re-parsear constantemente
 let productsCache = null
@@ -17,8 +19,26 @@ export const useProducts = () => {
   })
 
   useEffect(() => {
-    // Cargar productos desde localStorage si existen (actualizados desde admin)
-    const loadProducts = () => {
+    // Cargar productos desde Supabase primero, luego localStorage como respaldo
+    const loadProducts = async () => {
+      try {
+        // Intentar cargar desde Supabase
+        const supabaseProducts = await loadProductsFromSupabase()
+        
+        if (supabaseProducts && supabaseProducts.length > 0) {
+          // Si hay productos en Supabase, usarlos
+          productsCache = supabaseProducts
+          cacheTimestamp = Date.now()
+          setProducts(supabaseProducts)
+          // Sincronizar localStorage
+          localStorage.setItem('giaElectroProducts', JSON.stringify(supabaseProducts))
+          return
+        }
+      } catch (error) {
+        console.error('Error cargando productos desde Supabase:', error)
+      }
+      
+      // Si no hay en Supabase, intentar desde localStorage
       try {
         const savedProducts = localStorage.getItem('giaElectroProducts')
         if (savedProducts) {
@@ -34,6 +54,7 @@ export const useProducts = () => {
       } catch (error) {
         console.error('Error cargando productos desde localStorage:', error)
       }
+      
       // Si no hay productos guardados, usar array vacío
       if (!productsCache) {
         productsCache = []
@@ -59,9 +80,27 @@ export const useProducts = () => {
         cacheTimestamp = Date.now()
         setProducts(e.detail.products)
       } else {
-        // Si no hay productos en el evento, recargar desde localStorage
+        // Si no hay productos en el evento, recargar desde Supabase
         loadProducts()
       }
+    }
+    
+    // Escuchar cambios en Supabase usando Realtime
+    let productsChannel = null
+    try {
+      productsChannel = supabase
+        .channel('products-changes')
+        .on('postgres_changes', 
+          { event: '*', schema: 'public', table: 'products' },
+          (payload) => {
+            console.log('🔄 Cambio detectado en Supabase products:', payload.eventType)
+            // Recargar productos cuando hay cambios
+            loadProducts()
+          }
+        )
+        .subscribe()
+    } catch (error) {
+      console.warn('Error suscribiéndose a cambios de Supabase:', error)
     }
 
     window.addEventListener('storage', handleStorageChange)
@@ -92,6 +131,10 @@ export const useProducts = () => {
       window.removeEventListener('storage', handleStorageChange)
       window.removeEventListener('productsUpdated', handleProductsUpdate)
       clearInterval(interval)
+      // Desuscribirse del canal de Supabase
+      if (productsChannel) {
+        supabase.removeChannel(productsChannel)
+      }
     }
   }, [])
 

@@ -7,6 +7,7 @@ import { getPlaceholderImage } from '../utils/imageHelper'
 import { showToast } from '../utils/toast'
 import { logger } from '../utils/logger'
 import { uploadProductImage, getProductImageUrl } from '../utils/imageStorage'
+import { saveProductsToSupabase, loadProductsFromSupabase } from '../utils/productStorage'
 import { format, subDays, startOfDay, endOfDay } from 'date-fns'
 import {
   generateSecureOrderId,
@@ -1600,32 +1601,74 @@ function ProductManagementSection() {
   }, [products])
 
   // Función helper para guardar productos y notificar actualización en tiempo real
-  const saveProductsAndNotify = (updatedProducts) => {
-    setProducts(updatedProducts)
-    localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
-    
-    // Disparar evento personalizado para actualización en tiempo real en la misma ventana
-    window.dispatchEvent(new CustomEvent('productsUpdated', { 
-      detail: { products: updatedProducts } 
-    }))
-    
-    // También disparar evento storage para otras ventanas/pestañas
-    window.dispatchEvent(new Event('storage'))
+  const saveProductsAndNotify = async (updatedProducts) => {
+    try {
+      // Guardar en Supabase
+      await saveProductsToSupabase(updatedProducts)
+      
+      // También guardar en localStorage como respaldo
+      localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
+      
+      // Actualizar estado
+      setProducts(updatedProducts)
+      
+      // Disparar evento personalizado para actualización en tiempo real en la misma ventana
+      window.dispatchEvent(new CustomEvent('productsUpdated', { 
+        detail: { products: updatedProducts } 
+      }))
+      
+      // También disparar evento storage para otras ventanas/pestañas
+      window.dispatchEvent(new Event('storage'))
+    } catch (error) {
+      logger.error('Error guardando productos:', error)
+      // Si falla Supabase, guardar solo en localStorage
+      setProducts(updatedProducts)
+      localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
+      showToast.error('Error al sincronizar con Supabase. Los cambios se guardaron localmente.')
+    }
   }
 
-  const loadProducts = () => {
-    // Cargar productos desde localStorage solamente
+  const loadProducts = async () => {
+    // Cargar productos desde Supabase primero, luego localStorage como respaldo
     try {
-      const savedProducts = localStorage.getItem('giaElectroProducts')
-      if (savedProducts) {
-        setProducts(JSON.parse(savedProducts))
+      const supabaseProducts = await loadProductsFromSupabase()
+      
+      if (supabaseProducts && supabaseProducts.length > 0) {
+        // Si hay productos en Supabase, usarlos
+        setProducts(supabaseProducts)
+        // Sincronizar localStorage
+        localStorage.setItem('giaElectroProducts', JSON.stringify(supabaseProducts))
       } else {
-        // No cargar productos iniciales, empezar vacío
-        setProducts([])
+        // Si no hay en Supabase, intentar desde localStorage
+        const savedProducts = localStorage.getItem('giaElectroProducts')
+        if (savedProducts) {
+          const parsed = JSON.parse(savedProducts)
+          setProducts(parsed)
+          // Sincronizar con Supabase
+          if (parsed.length > 0) {
+            await saveProductsToSupabase(parsed).catch(err => {
+              logger.warn('Error sincronizando productos con Supabase:', err)
+            })
+          }
+        } else {
+          // No hay productos, empezar vacío
+          setProducts([])
+        }
       }
     } catch (error) {
       logger.error('Error cargando productos:', error)
-      setProducts([])
+      // En caso de error, intentar desde localStorage
+      try {
+        const savedProducts = localStorage.getItem('giaElectroProducts')
+        if (savedProducts) {
+          setProducts(JSON.parse(savedProducts))
+        } else {
+          setProducts([])
+        }
+      } catch (localError) {
+        logger.error('Error cargando desde localStorage:', localError)
+        setProducts([])
+      }
     }
   }
 
@@ -1945,23 +1988,45 @@ function ProductManagementSection() {
     setExcelPreviewData([])
   }
 
-  const updateProduct = (productId, field, value) => {
+  const updateProduct = async (productId, field, value) => {
     const updatedProducts = products.map(p =>
       p.id === productId ? { ...p, [field]: value } : p
     )
-    saveProductsAndNotify(updatedProducts)
+    await saveProductsAndNotify(updatedProducts)
     showToast.success('Producto actualizado')
   }
 
-  const deleteProduct = (productId) => {
+  const deleteProduct = async (productId) => {
     if (window.confirm('¿Estás seguro de eliminar este producto?')) {
-      const updatedProducts = products.filter(p => p.id !== productId)
-      saveProductsAndNotify(updatedProducts)
-      showToast.success('Producto eliminado')
+      try {
+        // Eliminar de Supabase
+        const { deleteProductFromSupabase } = await import('../utils/productStorage')
+        await deleteProductFromSupabase(productId)
+        
+        // Actualizar estado local
+        const updatedProducts = products.filter(p => p.id !== productId)
+        setProducts(updatedProducts)
+        localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
+        
+        // Notificar actualización
+        window.dispatchEvent(new CustomEvent('productsUpdated', { 
+          detail: { products: updatedProducts } 
+        }))
+        window.dispatchEvent(new Event('storage'))
+        
+        showToast.success('Producto eliminado')
+      } catch (error) {
+        logger.error('Error eliminando producto:', error)
+        // Si falla Supabase, eliminar solo localmente
+        const updatedProducts = products.filter(p => p.id !== productId)
+        setProducts(updatedProducts)
+        localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
+        showToast.error('Error al sincronizar con Supabase. El producto se eliminó localmente.')
+      }
     }
   }
 
-  const handleAddProduct = () => {
+  const handleAddProduct = async () => {
     // Validar campos requeridos
     if (!newProduct.name || !newProduct.price || !newProduct.category) {
       showToast.error('Por favor completa los campos requeridos: Nombre, Precio y Categoría')
@@ -1996,7 +2061,7 @@ function ProductManagementSection() {
 
     // Agregar el producto
     const updatedProducts = [...products, product]
-    saveProductsAndNotify(updatedProducts)
+    await saveProductsAndNotify(updatedProducts)
 
     // Limpiar formulario y cerrar modal
     setNewProduct({
@@ -2065,7 +2130,7 @@ function ProductManagementSection() {
           : p
       )
       
-      saveProductsAndNotify(updatedProducts)
+      await       await saveProductsAndNotify(updatedProducts)
       
       showToast.success('Imagen actualizada exitosamente')
       
@@ -2082,11 +2147,11 @@ function ProductManagementSection() {
     }
   }
 
-  const updateProductPrice = (productId, newPrice) => {
+  const updateProductPrice = async (productId, newPrice) => {
     const updatedProducts = products.map(p =>
       p.id === productId ? { ...p, price: parseFloat(newPrice) || 0 } : p
     )
-    saveProductsAndNotify(updatedProducts)
+    await saveProductsAndNotify(updatedProducts)
   }
 
   return (
