@@ -12,7 +12,8 @@ export const useProducts = () => {
     if (productsCache && cacheTimestamp && Date.now() - cacheTimestamp < CACHE_DURATION) {
       return productsCache
     }
-    return defaultProducts
+    // No usar productos por defecto, empezar vacío
+    return []
   })
 
   useEffect(() => {
@@ -33,9 +34,9 @@ export const useProducts = () => {
       } catch (error) {
         console.error('Error cargando productos desde localStorage:', error)
       }
-      // Si no hay productos guardados, usar los por defecto
+      // Si no hay productos guardados, usar array vacío
       if (!productsCache) {
-        productsCache = defaultProducts
+        productsCache = []
         cacheTimestamp = Date.now()
       }
       setProducts(productsCache)

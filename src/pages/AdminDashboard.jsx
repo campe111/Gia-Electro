@@ -1614,19 +1614,18 @@ function ProductManagementSection() {
   }
 
   const loadProducts = () => {
-    // Cargar productos desde localStorage o el archivo de datos
+    // Cargar productos desde localStorage solamente
     try {
       const savedProducts = localStorage.getItem('giaElectroProducts')
       if (savedProducts) {
         setProducts(JSON.parse(savedProducts))
       } else {
-        // Importar productos iniciales
-        import('../data/products').then((module) => {
-          saveProductsAndNotify(module.products)
-        })
+        // No cargar productos iniciales, empezar vacío
+        setProducts([])
       }
     } catch (error) {
       logger.error('Error cargando productos:', error)
+      setProducts([])
     }
   }
 
@@ -1887,14 +1886,23 @@ function ProductManagementSection() {
   }
 
   const confirmExcelUpload = () => {
-    // Leer productos existentes desde localStorage para asegurarnos de tener todos
+    // Leer productos existentes desde localStorage
     const savedProducts = localStorage.getItem('giaElectroProducts')
-    const existingProducts = savedProducts ? JSON.parse(savedProducts) : []
+    let existingProducts = []
     
-    console.log('📦 Productos existentes desde localStorage:', existingProducts.length)
-    console.log('📦 Productos del Excel:', excelPreviewData.length)
-    console.log('📦 IDs existentes:', existingProducts.map(p => p.id))
-    console.log('📦 IDs del Excel:', excelPreviewData.map(p => p.id))
+    if (savedProducts) {
+      try {
+        existingProducts = JSON.parse(savedProducts)
+      } catch (error) {
+        console.error('Error parseando productos desde localStorage:', error)
+      }
+    }
+    
+    // Si no hay productos en localStorage pero hay en el estado, usar el estado
+    // Esto es importante porque la página ahora empieza vacía
+    if (existingProducts.length === 0 && products.length > 0) {
+      existingProducts = [...products]
+    }
     
     // Empezar con todos los productos existentes
     const mergedProducts = [...existingProducts]
@@ -2263,7 +2271,7 @@ function ProductManagementSection() {
                         {filteredProducts.length === 0 ? (
                           <tr>
                             <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
-                              No hay productos. Sube un archivo Excel para comenzar.
+                              Aún no hay productos cargados
                             </td>
                           </tr>
                         ) : (
