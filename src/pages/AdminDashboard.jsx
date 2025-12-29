@@ -1641,21 +1641,27 @@ function ProductManagementSection() {
     // Validar tamaño del archivo
     const sizeValidation = validateFileSize(file, FILE_SIZE_LIMITS.EXCEL)
     if (!sizeValidation.isValid) {
+      console.error('❌ Error de tamaño:', sizeValidation.error)
       logger.error('Error de tamaño:', sizeValidation.error)
       showToast.error(sizeValidation.error)
       e.target.value = '' // Limpiar input
       return
     }
+    console.log('✅ Validación de tamaño pasada')
 
     // Validar tipo de archivo - Hacer más flexible
     const fileExtension = '.' + file.name.split('.').pop().toLowerCase()
     const isValidExtension = ALLOWED_EXCEL_EXTENSIONS.includes(fileExtension)
     const isValidMimeType = !file.type || ALLOWED_EXCEL_TYPES.includes(file.type) || file.type === 'application/octet-stream'
     
+    console.log('📋 Validación de tipo:')
+    console.log('📋 Extensión:', fileExtension, 'Válida:', isValidExtension)
+    console.log('📋 MIME:', file.type, 'Válido:', isValidMimeType)
     logger.log('Validación:', { fileExtension, isValidExtension, mimeType: file.type, isValidMimeType })
     
     if (!isValidExtension) {
       const error = `Extensión de archivo no permitida. Extensión recibida: ${fileExtension}. Extensiones permitidas: ${ALLOWED_EXCEL_EXTENSIONS.join(', ')}`
+      console.error('❌ Error de extensión:', error)
       logger.error('Error de extensión:', error)
       showToast.error(error)
       e.target.value = ''
@@ -1664,23 +1670,42 @@ function ProductManagementSection() {
     
     // Si el tipo MIME no coincide pero la extensión es válida, continuar (algunos Excel tienen tipos MIME diferentes)
     if (!isValidMimeType && file.type) {
+      console.warn('⚠️ Tipo MIME no reconocido pero extensión válida:', file.type, 'Continuando...')
       logger.warn('Tipo MIME no reconocido pero extensión válida:', file.type, 'Continuando...')
     }
+    console.log('✅ Validación de tipo pasada')
 
+    console.log('⏳ Iniciando carga del archivo...')
     setIsLoading(true)
     setUploadStatus({ type: '', message: '' })
 
     try {
+      console.log('📚 Cargando librería XLSX...')
       const XLSX = await import('xlsx')
+      console.log('📚 Librería XLSX cargada')
       const reader = new FileReader()
+      
+      console.log('📖 Configurando FileReader...')
 
       reader.onload = (event) => {
         try {
+          console.log('📖 FileReader onload ejecutado')
+          console.log('📖 Event result type:', typeof event.target.result)
+          console.log('📖 Event result length:', event.target.result?.byteLength || event.target.result?.length)
           logger.log('Leyendo archivo Excel...')
+          
           const data = new Uint8Array(event.target.result)
+          console.log('📊 Datos convertidos a Uint8Array, longitud:', data.length)
+          
           const workbook = XLSX.read(data, { type: 'array' })
+          console.log('📊 Workbook leído, hojas:', workbook.SheetNames)
+          
           const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
+          console.log('📋 Primera hoja seleccionada:', workbook.SheetNames[0])
+          
           const jsonData = XLSX.utils.sheet_to_json(firstSheet)
+          console.log('📋 JSON convertido, filas:', jsonData.length)
+          console.log('📋 Primera fila de ejemplo:', jsonData[0])
           
           logger.log('Datos leídos:', jsonData.length, 'filas')
           logger.log('Primera fila de ejemplo:', jsonData[0])
@@ -1793,16 +1818,24 @@ function ProductManagementSection() {
         }
       }
 
-      reader.onerror = () => {
+      reader.onerror = (error) => {
+        console.error('❌ Error en FileReader:', error)
         setUploadStatus({
           type: 'error',
           message: 'Error al leer el archivo'
         })
         setIsLoading(false)
       }
+      
+      reader.onloadend = () => {
+        console.log('📖 FileReader onloadend ejecutado')
+      }
 
+      console.log('📖 Iniciando lectura del archivo como ArrayBuffer...')
       reader.readAsArrayBuffer(file)
     } catch (error) {
+      console.error('❌ Error en try/catch principal:', error)
+      console.error('❌ Stack trace:', error.stack)
       logger.error('Error cargando librería Excel:', error)
       setUploadStatus({
         type: 'error',
