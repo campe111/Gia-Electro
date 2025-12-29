@@ -1568,6 +1568,8 @@ function ProductManagementSection() {
   const [showImageUpload, setShowImageUpload] = useState(false)
   const [showExcelPreview, setShowExcelPreview] = useState(false)
   const [excelPreviewData, setExcelPreviewData] = useState([])
+  const [selectedProductsForUpload, setSelectedProductsForUpload] = useState(new Set())
+  const [productDuplicates, setProductDuplicates] = useState(new Map())
   const excelFileInputRef = useRef(null)
   const [editingProduct, setEditingProduct] = useState(null)
   const [categories, setCategories] = useState([])
@@ -1885,8 +1887,25 @@ function ProductManagementSection() {
             throw new Error('No se encontraron productos válidos en el archivo Excel')
           }
 
+          // Detectar duplicados comparando con productos existentes
+          const existingProductIds = new Set(products.map(p => String(p.id)))
+          const duplicatesMap = new Map()
+          const initialSelected = new Set()
+
+          processedProducts.forEach(product => {
+            const productId = String(product.id)
+            const isDuplicate = existingProductIds.has(productId)
+            duplicatesMap.set(productId, isDuplicate)
+            // Por defecto, seleccionar solo los productos nuevos (no duplicados)
+            if (!isDuplicate) {
+              initialSelected.add(productId)
+            }
+          })
+
           // Mostrar preview antes de confirmar
           console.log('👁️ Mostrando preview...')
+          setProductDuplicates(duplicatesMap)
+          setSelectedProductsForUpload(initialSelected)
           setExcelPreviewData(processedProducts)
           setShowExcelPreview(true)
           setIsLoading(false)
@@ -1928,64 +1947,138 @@ function ProductManagementSection() {
     }
   }
 
-  const confirmExcelUpload = () => {
-    // Leer productos existentes desde localStorage
-    const savedProducts = localStorage.getItem('giaElectroProducts')
+  const confirmExcelUpload = async () => {
+    // Solo procesar productos seleccionados
+    const productsToUpload = excelPreviewData.filter(p => 
+      selectedProductsForUpload.has(String(p.id))
+    )
+
+    if (productsToUpload.length === 0) {
+      showToast.error('Por favor selecciona al menos un producto para cargar')
+      return
+    }
+
+    // Leer productos existentes desde Supabase primero
     let existingProducts = []
     
-    if (savedProducts) {
-      try {
-        existingProducts = JSON.parse(savedProducts)
-      } catch (error) {
-        console.error('Error parseando productos desde localStorage:', error)
+    try {
+      existingProducts = await loadProductsFromSupabase()
+    } catch (error) {
+      logger.warn('Error cargando desde Supabase, usando estado local:', error)
+      // Si falla Supabase, usar el estado o localStorage
+      if (products.length > 0) {
+        existingProducts = [...products]
+      } else {
+        const savedProducts = localStorage.getItem('giaElectroProducts')
+        if (savedProducts) {
+          try {
+            existingProducts = JSON.parse(savedProducts)
+          } catch (parseError) {
+            logger.error('Error parseando productos desde localStorage:', parseError)
+          }
+        }
       }
-    }
-    
-    // Si no hay productos en localStorage pero hay en el estado, usar el estado
-    // Esto es importante porque la página ahora empieza vacía
-    if (existingProducts.length === 0 && products.length > 0) {
-      existingProducts = [...products]
     }
     
     // Empezar con todos los productos existentes
     const mergedProducts = [...existingProducts]
     
-    // Procesar cada producto del Excel
-    excelPreviewData.forEach(newProduct => {
+    // Procesar solo los productos seleccionados
+    productsToUpload.forEach(newProduct => {
       const existingIndex = mergedProducts.findIndex(p => String(p.id) === String(newProduct.id))
       if (existingIndex >= 0) {
         // Actualizar producto existente
-        console.log(`🔄 Actualizando producto ID ${newProduct.id}`)
         mergedProducts[existingIndex] = newProduct
       } else {
         // Agregar nuevo producto
-        console.log(`➕ Agregando nuevo producto ID ${newProduct.id}`)
         mergedProducts.push(newProduct)
       }
     })
     
-    console.log('📦 Total de productos después del merge:', mergedProducts.length)
-    
     // Guardar y actualizar estado
-    saveProductsAndNotify(mergedProducts)
+    await saveProductsAndNotify(mergedProducts)
     
-    const addedCount = excelPreviewData.filter(p => 
+    const addedCount = productsToUpload.filter(p => 
       !existingProducts.some(existing => String(existing.id) === String(p.id))
     ).length
-    const updatedCount = excelPreviewData.length - addedCount
+    const updatedCount = productsToUpload.length - addedCount
     
-    let message = `✅ ${excelPreviewData.length} productos procesados`
+    let message = `✅ ${productsToUpload.length} productos procesados`
     if (addedCount > 0) message += ` (${addedCount} nuevos)`
     if (updatedCount > 0) message += ` (${updatedCount} actualizados)`
     
     showToast.success(message)
     setShowExcelPreview(false)
     setExcelPreviewData([])
+    setSelectedProductsForUpload(new Set())
+    setProductDuplicates(new Map())
   }
 
   const cancelExcelUpload = () => {
     setShowExcelPreview(false)
     setExcelPreviewData([])
+    setSelectedProductsForUpload(new Set())
+    setProductDuplicates(new Map())
+  }
+
+  // Funciones helper para seleccionar/deseleccionar productos
+  const toggleProductSelection = (productId) => {
+    const newSelected = new Set(selectedProductsForUpload)
+    const id = String(productId)
+    if (newSelected.has(id)) {
+      newSelected.delete(id)
+    } else {
+      newSelected.add(id)
+    }
+    setSelectedProductsForUpload(newSelected)
+  }
+
+  const selectAllProducts = () => {
+    const allIds = new Set(excelPreviewData.map(p => String(p.id)))
+    setSelectedProductsForUpload(allIds)
+  }
+
+  const deselectAllProducts = () => {
+    setSelectedProductsForUpload(new Set())
+  }
+
+  const selectOnlyNew = () => {
+    const newIds = new Set(
+      excelPreviewData
+        .filter(p => !productDuplicates.get(String(p.id)))
+        .map(p => String(p.id))
+    )
+    setSelectedProductsForUpload(newIds)
+  }
+
+  // Funciones helper para seleccionar/deseleccionar productos
+  const toggleProductSelection = (productId) => {
+    const newSelected = new Set(selectedProductsForUpload)
+    const id = String(productId)
+    if (newSelected.has(id)) {
+      newSelected.delete(id)
+    } else {
+      newSelected.add(id)
+    }
+    setSelectedProductsForUpload(newSelected)
+  }
+
+  const selectAllProducts = () => {
+    const allIds = new Set(excelPreviewData.map(p => String(p.id)))
+    setSelectedProductsForUpload(allIds)
+  }
+
+  const deselectAllProducts = () => {
+    setSelectedProductsForUpload(new Set())
+  }
+
+  const selectOnlyNew = () => {
+    const newIds = new Set(
+      excelPreviewData
+        .filter(p => !productDuplicates.get(String(p.id)))
+        .map(p => String(p.id))
+    )
+    setSelectedProductsForUpload(newIds)
   }
 
   const updateProduct = async (productId, field, value) => {
@@ -2456,11 +2549,16 @@ function ProductManagementSection() {
       {/* Modal de Preview de Excel */}
       {showExcelPreview && excelPreviewData.length > 0 && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-primary-black">
-                Vista Previa - {excelPreviewData.length} productos
-              </h2>
+          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+              <div>
+                <h2 className="text-2xl font-bold text-primary-black">
+                  Vista Previa - {excelPreviewData.length} productos
+                </h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  {selectedProductsForUpload.size} de {excelPreviewData.length} seleccionados
+                </p>
+              </div>
               <button
                 onClick={cancelExcelUpload}
                 className="text-gray-500 hover:text-gray-700"
@@ -2471,39 +2569,97 @@ function ProductManagementSection() {
 
             <div className="p-6">
               <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-800">
-                  Revisa los productos antes de confirmar. Se reemplazarán todos los productos actuales.
+                <p className="text-sm text-blue-800 mb-2">
+                  Selecciona los productos que deseas cargar. Los productos duplicados (que ya existen) aparecen marcados en amarillo.
                 </p>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={selectAllProducts}
+                    className="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors"
+                  >
+                    Seleccionar Todos
+                  </button>
+                  <button
+                    onClick={deselectAllProducts}
+                    className="px-3 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600 transition-colors"
+                  >
+                    Deseleccionar Todos
+                  </button>
+                  <button
+                    onClick={selectOnlyNew}
+                    className="px-3 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 transition-colors"
+                  >
+                    Solo Nuevos
+                  </button>
+                </div>
               </div>
 
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gray-50 sticky top-0">
                     <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-12">
+                        <input
+                          type="checkbox"
+                          checked={selectedProductsForUpload.size === excelPreviewData.length && excelPreviewData.length > 0}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              selectAllProducts()
+                            } else {
+                              deselectAllProducts()
+                            }
+                          }}
+                          className="rounded border-gray-300 text-primary-yellow focus:ring-primary-yellow"
+                        />
+                      </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Categoría</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Precio</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Marca</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {excelPreviewData.slice(0, 20).map((product, index) => (
-                      <tr key={index}>
-                        <td className="px-4 py-2 text-sm">{product.id}</td>
-                        <td className="px-4 py-2 text-sm">{product.name}</td>
-                        <td className="px-4 py-2 text-sm">{product.category}</td>
-                        <td className="px-4 py-2 text-sm font-semibold">${product.price.toLocaleString()}</td>
-                        <td className="px-4 py-2 text-sm">{product.brand || '-'}</td>
-                      </tr>
-                    ))}
+                    {excelPreviewData.map((product, index) => {
+                      const productId = String(product.id)
+                      const isSelected = selectedProductsForUpload.has(productId)
+                      const isDuplicate = productDuplicates.get(productId) || false
+                      
+                      return (
+                        <tr 
+                          key={index}
+                          className={isDuplicate ? 'bg-yellow-50' : ''}
+                        >
+                          <td className="px-4 py-2">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleProductSelection(productId)}
+                              className="rounded border-gray-300 text-primary-yellow focus:ring-primary-yellow"
+                            />
+                          </td>
+                          <td className="px-4 py-2 text-sm">{product.id}</td>
+                          <td className="px-4 py-2 text-sm font-medium">{product.name}</td>
+                          <td className="px-4 py-2 text-sm">{product.category}</td>
+                          <td className="px-4 py-2 text-sm font-semibold">${product.price.toLocaleString()}</td>
+                          <td className="px-4 py-2 text-sm">{product.brand || '-'}</td>
+                          <td className="px-4 py-2 text-sm">
+                            {isDuplicate ? (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                Duplicado
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Nuevo
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
-                {excelPreviewData.length > 20 && (
-                  <p className="mt-4 text-sm text-gray-500 text-center">
-                    ... y {excelPreviewData.length - 20} productos más
-                  </p>
-                )}
               </div>
 
               <div className="flex gap-4 mt-6 pt-4 border-t">
@@ -2515,9 +2671,10 @@ function ProductManagementSection() {
                 </button>
                 <button
                   onClick={confirmExcelUpload}
-                  className="flex-1 px-6 py-3 bg-primary-yellow text-primary-black rounded-lg hover:bg-yellow-500 transition-colors font-semibold"
+                  disabled={selectedProductsForUpload.size === 0}
+                  className="flex-1 px-6 py-3 bg-primary-yellow text-primary-black rounded-lg hover:bg-yellow-500 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Confirmar y Cargar {excelPreviewData.length} Productos
+                  Confirmar y Cargar {selectedProductsForUpload.size} Producto{selectedProductsForUpload.size !== 1 ? 's' : ''}
                 </button>
               </div>
             </div>
