@@ -2051,36 +2051,6 @@ function ProductManagementSection() {
     setSelectedProductsForUpload(newIds)
   }
 
-  // Funciones helper para seleccionar/deseleccionar productos
-  const toggleProductSelection = (productId) => {
-    const newSelected = new Set(selectedProductsForUpload)
-    const id = String(productId)
-    if (newSelected.has(id)) {
-      newSelected.delete(id)
-    } else {
-      newSelected.add(id)
-    }
-    setSelectedProductsForUpload(newSelected)
-  }
-
-  const selectAllProducts = () => {
-    const allIds = new Set(excelPreviewData.map(p => String(p.id)))
-    setSelectedProductsForUpload(allIds)
-  }
-
-  const deselectAllProducts = () => {
-    setSelectedProductsForUpload(new Set())
-  }
-
-  const selectOnlyNew = () => {
-    const newIds = new Set(
-      excelPreviewData
-        .filter(p => !productDuplicates.get(String(p.id)))
-        .map(p => String(p.id))
-    )
-    setSelectedProductsForUpload(newIds)
-  }
-
   const updateProduct = async (productId, field, value) => {
     const updatedProducts = products.map(p =>
       p.id === productId ? { ...p, [field]: value } : p
