@@ -1590,6 +1590,8 @@ function ProductManagementSection() {
   const [imagePreview, setImagePreview] = useState(null)
   const [productSearchTerm, setProductSearchTerm] = useState('')
   const [isSyncing, setIsSyncing] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [productToDelete, setProductToDelete] = useState(null)
 
   useEffect(() => {
     loadProducts()
@@ -1632,46 +1634,52 @@ function ProductManagementSection() {
   }
 
   const loadProducts = async () => {
-    // Cargar productos desde Supabase primero, luego localStorage como respaldo
+    setIsLoading(true)
+    // Siempre intentar cargar desde Supabase primero
     try {
       const supabaseProducts = await loadProductsFromSupabase()
       
-      if (supabaseProducts && supabaseProducts.length > 0) {
-        // Si hay productos en Supabase, usarlos
+      // Si Supabase devolvió datos (aunque sea un array vacío), usar esos datos
+      // Esto asegura que si hay productos en Supabase, se usen
+      if (supabaseProducts !== null && supabaseProducts !== undefined) {
         setProducts(supabaseProducts)
-        // Sincronizar localStorage
+        // Sincronizar localStorage con los datos de Supabase
         localStorage.setItem('giaElectroProducts', JSON.stringify(supabaseProducts))
-      } else {
-        // Si no hay en Supabase, intentar desde localStorage
-        const savedProducts = localStorage.getItem('giaElectroProducts')
-        if (savedProducts) {
-          const parsed = JSON.parse(savedProducts)
+        setIsLoading(false)
+        logger.log(`✅ ${supabaseProducts.length} productos cargados desde Supabase`)
+        return
+      }
+    } catch (error) {
+      logger.error('Error cargando productos desde Supabase:', error)
+      // Si hay error, continuar al respaldo de localStorage
+    }
+    
+    // Solo usar localStorage como respaldo si Supabase falló o no devolvió datos
+    try {
+      const savedProducts = localStorage.getItem('giaElectroProducts')
+      if (savedProducts) {
+        const parsed = JSON.parse(savedProducts)
+        if (Array.isArray(parsed)) {
           setProducts(parsed)
-          // Sincronizar con Supabase
+          logger.log(`⚠️ Cargados ${parsed.length} productos desde localStorage (respaldo)`)
+          // Intentar sincronizar con Supabase si hay productos en localStorage
           if (parsed.length > 0) {
             await saveProductsToSupabase(parsed).catch(err => {
               logger.warn('Error sincronizando productos con Supabase:', err)
             })
           }
         } else {
-          // No hay productos, empezar vacío
           setProducts([])
         }
-      }
-    } catch (error) {
-      logger.error('Error cargando productos:', error)
-      // En caso de error, intentar desde localStorage
-      try {
-        const savedProducts = localStorage.getItem('giaElectroProducts')
-        if (savedProducts) {
-          setProducts(JSON.parse(savedProducts))
-        } else {
-          setProducts([])
-        }
-      } catch (localError) {
-        logger.error('Error cargando desde localStorage:', localError)
+      } else {
         setProducts([])
+        logger.log('ℹ️ No hay productos en Supabase ni en localStorage')
       }
+    } catch (localError) {
+      logger.error('Error cargando desde localStorage:', localError)
+      setProducts([])
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -2060,33 +2068,41 @@ function ProductManagementSection() {
     showToast.success('Producto actualizado')
   }
 
-  const deleteProduct = async (productId) => {
-    if (window.confirm('¿Estás seguro de eliminar este producto?')) {
-      try {
-        // Eliminar de Supabase
-        const { deleteProductFromSupabase } = await import('../utils/productStorage')
-        await deleteProductFromSupabase(productId)
-        
-        // Actualizar estado local
-        const updatedProducts = products.filter(p => p.id !== productId)
-        setProducts(updatedProducts)
-        localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
-        
-        // Notificar actualización
-        window.dispatchEvent(new CustomEvent('productsUpdated', { 
-          detail: { products: updatedProducts } 
-        }))
-        window.dispatchEvent(new Event('storage'))
-        
-        showToast.success('Producto eliminado')
-      } catch (error) {
-        logger.error('Error eliminando producto:', error)
-        // Si falla Supabase, eliminar solo localmente
-        const updatedProducts = products.filter(p => p.id !== productId)
-        setProducts(updatedProducts)
-        localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
-        showToast.error('Error al sincronizar con Supabase. El producto se eliminó localmente.')
-      }
+  const deleteProduct = (productId) => {
+    setProductToDelete(productId)
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDeleteProduct = async () => {
+    if (!productToDelete) return
+
+    try {
+      // Eliminar de Supabase
+      const { deleteProductFromSupabase } = await import('../utils/productStorage')
+      await deleteProductFromSupabase(productToDelete)
+      
+      // Actualizar estado local
+      const updatedProducts = products.filter(p => p.id !== productToDelete)
+      setProducts(updatedProducts)
+      localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
+      
+      // Notificar actualización
+      window.dispatchEvent(new CustomEvent('productsUpdated', { 
+        detail: { products: updatedProducts } 
+      }))
+      window.dispatchEvent(new Event('storage'))
+      
+      showToast.success('Producto eliminado exitosamente')
+    } catch (error) {
+      logger.error('Error eliminando producto:', error)
+      // Si falla Supabase, eliminar solo localmente
+      const updatedProducts = products.filter(p => p.id !== productToDelete)
+      setProducts(updatedProducts)
+      localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
+      showToast.error('Error al sincronizar con Supabase. El producto se eliminó localmente.')
+    } finally {
+      setShowDeleteConfirm(false)
+      setProductToDelete(null)
     }
   }
 
@@ -2982,6 +2998,42 @@ function ProductManagementSection() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmación para Eliminar Producto */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
+                <XCircleIcon className="h-6 w-6 text-red-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 text-center mb-2">
+                ¿Eliminar producto?
+              </h3>
+              <p className="text-gray-600 text-center mb-6">
+                Esta acción no se puede deshacer. El producto será eliminado permanentemente.
+              </p>
+              <div className="flex gap-4">
+                <button
+                  onClick={() => {
+                    setShowDeleteConfirm(false)
+                    setProductToDelete(null)
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmDeleteProduct}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
+                >
+                  Eliminar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
