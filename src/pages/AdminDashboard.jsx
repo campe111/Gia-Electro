@@ -2218,6 +2218,30 @@ function ProductManagementSection() {
     await saveProductsAndNotify(updatedProducts)
   }
 
+  const handleSyncProducts = async () => {
+    setIsSyncing(true)
+    try {
+      // Guardar productos actuales en Supabase
+      await saveProductsToSupabase(products)
+      
+      // Disparar eventos para actualizar otras ventanas/dispositivos
+      window.dispatchEvent(new CustomEvent('productsUpdated', { 
+        detail: { products: products } 
+      }))
+      window.dispatchEvent(new Event('storage'))
+      
+      // También disparar evento de forzar actualización
+      window.dispatchEvent(new CustomEvent('forceProductsRefresh'))
+      
+      showToast.success('✅ Productos sincronizados exitosamente')
+    } catch (error) {
+      logger.error('Error sincronizando productos:', error)
+      showToast.error('Error al sincronizar productos. Por favor, intenta de nuevo.')
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header de Productos */}
