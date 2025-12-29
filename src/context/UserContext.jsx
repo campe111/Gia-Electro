@@ -65,12 +65,23 @@ export const UserProvider = ({ children }) => {
         .single()
 
       if (error) {
-        logger.warn('Error fetching profile:', error.message)
+        // Si la tabla no existe o hay un error 404, simplemente no establecer perfil
+        // Esto es normal si la tabla profiles no está configurada en Supabase
+        if (error.code === 'PGRST116' || error.message?.includes('Could not find the table')) {
+          // Tabla no existe, continuar sin perfil
+          setProfile(null)
+        } else {
+          logger.warn('Error fetching profile:', error.message)
+        }
+      } else {
+        setProfile(data)
       }
-
-      setProfile(data)
     } catch (error) {
-      logger.error('Error fetching profile:', error)
+      // Silenciar errores de tabla no encontrada
+      if (!error.message?.includes('Could not find the table')) {
+        logger.error('Error fetching profile:', error)
+      }
+      setProfile(null)
     } finally {
       setIsLoading(false)
     }

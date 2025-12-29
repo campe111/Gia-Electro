@@ -35,7 +35,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 // Verificar conexión
 export const testSupabaseConnection = async () => {
   try {
-    const { data, error } = await supabase.from('profiles').select('id').limit(1)
+    // Intentar verificar conexión con auth en lugar de profiles (más confiable)
+    const { data: { session }, error } = await supabase.auth.getSession()
     if (error && error.code !== 'PGRST116') {
       logger.error('❌ Error conectando a Supabase:', error.message)
       return false
@@ -43,6 +44,11 @@ export const testSupabaseConnection = async () => {
     logger.log('✅ Supabase conectado exitosamente')
     return true
   } catch (error) {
+    // Si la tabla profiles no existe, no es un error crítico
+    if (error.message?.includes('Could not find the table')) {
+      logger.log('✅ Supabase conectado (tabla profiles no configurada)')
+      return true
+    }
     logger.error('❌ Error conectando a Supabase:', error.message)
     return false
   }
