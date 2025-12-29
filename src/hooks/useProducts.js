@@ -43,16 +43,31 @@ export const useProducts = () => {
 
     loadProducts()
 
-    // Escuchar cambios en localStorage (cuando el admin actualiza productos)
+    // Escuchar cambios en localStorage (cuando el admin actualiza productos en otra ventana/pestaña)
     const handleStorageChange = (e) => {
       if (e.key === 'giaElectroProducts') {
         loadProducts()
       }
     }
 
+    // Escuchar evento personalizado para actualizaciones en tiempo real en la misma ventana
+    const handleProductsUpdate = (e) => {
+      if (e.detail?.products) {
+        // Actualizar inmediatamente con los productos del evento
+        productsCache = e.detail.products
+        cacheTimestamp = Date.now()
+        setProducts(e.detail.products)
+      } else {
+        // Si no hay productos en el evento, recargar desde localStorage
+        loadProducts()
+      }
+    }
+
     window.addEventListener('storage', handleStorageChange)
+    window.addEventListener('productsUpdated', handleProductsUpdate)
     
-    // También escuchar cambios en la misma ventana (para cuando el admin actualiza en la misma sesión)
+    // También escuchar cambios en la misma ventana como respaldo (para cuando el admin actualiza en la misma sesión)
+    // Reducido a 5 segundos ya que ahora tenemos actualización en tiempo real
     const interval = setInterval(() => {
       const savedProducts = localStorage.getItem('giaElectroProducts')
       if (savedProducts) {
@@ -70,10 +85,11 @@ export const useProducts = () => {
           // Ignorar errores de parsing
         }
       }
-    }, 3000) // Verificar cada 3 segundos (reducido para mejor rendimiento)
+    }, 5000) // Verificar cada 5 segundos como respaldo
 
     return () => {
       window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('productsUpdated', handleProductsUpdate)
       clearInterval(interval)
     }
   }, [])

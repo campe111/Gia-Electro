@@ -1599,6 +1599,20 @@ function ProductManagementSection() {
     setBrands(uniqueBrands.sort())
   }, [products])
 
+  // Función helper para guardar productos y notificar actualización en tiempo real
+  const saveProductsAndNotify = (updatedProducts) => {
+    setProducts(updatedProducts)
+    localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
+    
+    // Disparar evento personalizado para actualización en tiempo real en la misma ventana
+    window.dispatchEvent(new CustomEvent('productsUpdated', { 
+      detail: { products: updatedProducts } 
+    }))
+    
+    // También disparar evento storage para otras ventanas/pestañas
+    window.dispatchEvent(new Event('storage'))
+  }
+
   const loadProducts = () => {
     // Cargar productos desde localStorage o el archivo de datos
     try {
@@ -1608,8 +1622,7 @@ function ProductManagementSection() {
       } else {
         // Importar productos iniciales
         import('../data/products').then((module) => {
-          setProducts(module.products)
-          localStorage.setItem('giaElectroProducts', JSON.stringify(module.products))
+          saveProductsAndNotify(module.products)
         })
       }
     } catch (error) {
@@ -1903,11 +1916,7 @@ function ProductManagementSection() {
     console.log('📦 Total de productos después del merge:', mergedProducts.length)
     
     // Guardar y actualizar estado
-    setProducts(mergedProducts)
-    localStorage.setItem('giaElectroProducts', JSON.stringify(mergedProducts))
-    
-    // Disparar evento para actualizar
-    window.dispatchEvent(new Event('storage'))
+    saveProductsAndNotify(mergedProducts)
     
     const addedCount = excelPreviewData.filter(p => 
       !existingProducts.some(existing => String(existing.id) === String(p.id))
@@ -1932,18 +1941,14 @@ function ProductManagementSection() {
     const updatedProducts = products.map(p =>
       p.id === productId ? { ...p, [field]: value } : p
     )
-    setProducts(updatedProducts)
-    localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
-    window.dispatchEvent(new Event('storage'))
+    saveProductsAndNotify(updatedProducts)
     showToast.success('Producto actualizado')
   }
 
   const deleteProduct = (productId) => {
     if (window.confirm('¿Estás seguro de eliminar este producto?')) {
       const updatedProducts = products.filter(p => p.id !== productId)
-      setProducts(updatedProducts)
-      localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
-      window.dispatchEvent(new Event('storage'))
+      saveProductsAndNotify(updatedProducts)
       showToast.success('Producto eliminado')
     }
   }
@@ -1983,9 +1988,7 @@ function ProductManagementSection() {
 
     // Agregar el producto
     const updatedProducts = [...products, product]
-    setProducts(updatedProducts)
-    localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
-    window.dispatchEvent(new Event('storage'))
+    saveProductsAndNotify(updatedProducts)
 
     // Limpiar formulario y cerrar modal
     setNewProduct({
@@ -2054,11 +2057,7 @@ function ProductManagementSection() {
           : p
       )
       
-      setProducts(updatedProducts)
-      localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
-
-      // Disparar evento para actualizar en otras ventanas
-      window.dispatchEvent(new Event('storage'))
+      saveProductsAndNotify(updatedProducts)
       
       showToast.success('Imagen actualizada exitosamente')
       
@@ -2079,11 +2078,7 @@ function ProductManagementSection() {
     const updatedProducts = products.map(p =>
       p.id === productId ? { ...p, price: parseFloat(newPrice) || 0 } : p
     )
-    setProducts(updatedProducts)
-    localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
-    
-    // Disparar evento para actualizar
-    window.dispatchEvent(new Event('storage'))
+    saveProductsAndNotify(updatedProducts)
   }
 
   return (
