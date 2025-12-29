@@ -6,6 +6,7 @@ import { sendCustomerConfirmationEmail } from '../services/emailService'
 import { getPlaceholderImage } from '../utils/imageHelper'
 import { showToast } from '../utils/toast'
 import { logger } from '../utils/logger'
+import { uploadProductImage, getProductImageUrl } from '../utils/imageStorage'
 import { format, subDays, startOfDay, endOfDay } from 'date-fns'
 import {
   generateSecureOrderId,
@@ -1570,6 +1571,17 @@ function ProductManagementSection() {
   const [categories, setCategories] = useState([])
   const [brands, setBrands] = useState([])
   const [showCategoryManager, setShowCategoryManager] = useState(false)
+  const [showAddProductModal, setShowAddProductModal] = useState(false)
+  const [newProduct, setNewProduct] = useState({
+    id: '',
+    name: '',
+    brand: '',
+    price: '',
+    category: '',
+    description: '',
+    image: '',
+    previousPrice: ''
+  })
 
   useEffect(() => {
     loadProducts()
@@ -1799,6 +1811,60 @@ function ProductManagementSection() {
     }
   }
 
+  const handleAddProduct = () => {
+    // Validar campos requeridos
+    if (!newProduct.name || !newProduct.price || !newProduct.category) {
+      showToast.error('Por favor completa los campos requeridos: Nombre, Precio y Categoría')
+      return
+    }
+
+    // Validar que el precio sea un número válido
+    const price = parseFloat(newProduct.price)
+    if (isNaN(price) || price <= 0) {
+      showToast.error('El precio debe ser un número mayor a 0')
+      return
+    }
+
+    // Validar que el ID no esté duplicado
+    const existingProduct = products.find(p => String(p.id) === String(newProduct.id))
+    if (existingProduct) {
+      showToast.error(`Ya existe un producto con el ID ${newProduct.id}`)
+      return
+    }
+
+    // Crear el producto
+    const product = {
+      id: newProduct.id,
+      name: newProduct.name.trim(),
+      brand: newProduct.brand.trim() || '',
+      price: price,
+      category: newProduct.category.toLowerCase().replace(/\s+/g, '-'),
+      description: newProduct.description.trim() || '',
+      image: newProduct.image.trim() || '',
+      previousPrice: newProduct.previousPrice ? parseFloat(newProduct.previousPrice) : null
+    }
+
+    // Agregar el producto
+    const updatedProducts = [...products, product]
+    setProducts(updatedProducts)
+    localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
+    window.dispatchEvent(new Event('storage'))
+
+    // Limpiar formulario y cerrar modal
+    setNewProduct({
+      id: '',
+      name: '',
+      brand: '',
+      price: '',
+      category: '',
+      description: '',
+      image: '',
+      previousPrice: ''
+    })
+    setShowAddProductModal(false)
+    showToast.success('Producto agregado exitosamente')
+  }
+
   const handleImageUpload = async (e, productId) => {
     const file = e.target.files[0]
     if (!file) return
@@ -1821,40 +1887,30 @@ function ProductManagementSection() {
 
     setIsLoading(true)
     try {
-      // Convertir imagen a base64
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        const imageDataUrl = event.target.result
-        
-        // Actualizar producto con nueva imagen
-        const updatedProducts = products.map(p => 
-          p.id === productId 
-            ? { ...p, image: imageDataUrl }
-            : p
-        )
-        
-        setProducts(updatedProducts)
-        localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
+      // Subir imagen a Supabase Storage
+      const imageUrl = await uploadProductImage(file, productId)
+      
+      // Actualizar producto con nueva URL de imagen
+      const updatedProducts = products.map(p => 
+        p.id === productId 
+          ? { ...p, image: imageUrl }
+          : p
+      )
+      
+      setProducts(updatedProducts)
+      localStorage.setItem('giaElectroProducts', JSON.stringify(updatedProducts))
 
-        // Disparar evento para actualizar en otras ventanas
-        window.dispatchEvent(new Event('storage'))
-        
-        showToast.success('Imagen actualizada exitosamente')
-        
-        setShowImageUpload(false)
-        setSelectedProduct(null)
-        setIsLoading(false)
-      }
+      // Disparar evento para actualizar en otras ventanas
+      window.dispatchEvent(new Event('storage'))
       
-      reader.onerror = () => {
-        showToast.error('Error al leer la imagen')
-        setIsLoading(false)
-      }
+      showToast.success('Imagen actualizada exitosamente')
       
-      reader.readAsDataURL(file)
+      setShowImageUpload(false)
+      setSelectedProduct(null)
+      setIsLoading(false)
     } catch (error) {
       logger.error('Error subiendo imagen:', error)
-      showToast.error('Error al subir la imagen. Por favor, intenta de nuevo.')
+      showToast.error(error.message || 'Error al subir la imagen. Por favor, intenta de nuevo.')
       setIsLoading(false)
     }
   }
@@ -1884,6 +1940,27 @@ function ProductManagementSection() {
             </p>
           </div>
           <div className="flex gap-3 flex-wrap">
+            <button
+              onClick={() => {
+                // Generar ID automático si no hay productos o usar el siguiente ID
+                const maxId = products.length > 0 ? Math.max(...products.map(p => Number(p.id) || 0)) : 0
+                setNewProduct({
+                  id: (maxId + 1).toString(),
+                  name: '',
+                  brand: '',
+                  price: '',
+                  category: '',
+                  description: '',
+                  image: '',
+                  previousPrice: ''
+                })
+                setShowAddProductModal(true)
+              }}
+              className="px-4 py-2 bg-primary-red text-white rounded-lg hover:bg-red-700 transition-colors font-semibold flex items-center gap-2"
+            >
+              <PlusIcon className="h-5 w-5" />
+              <span>Agregar Producto</span>
+            </button>
             <label className="px-4 py-2 bg-primary-yellow text-primary-black rounded-lg hover:bg-yellow-500 transition-colors font-semibold cursor-pointer flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
               {isLoading ? (
                 <>
@@ -1967,7 +2044,7 @@ function ProductManagementSection() {
                       <td className="px-3 md:px-6 py-4 whitespace-nowrap text-sm">{product.id}</td>
                       <td className="px-3 md:px-6 py-4 whitespace-nowrap hidden sm:table-cell">
                       <img
-                        src={product.image || getPlaceholderImage(50, 50, 'Sin imagen')}
+                        src={getProductImageUrl(product.image) || getPlaceholderImage(50, 50, 'Sin imagen')}
                         alt={product.name}
                         className="w-12 h-12 md:w-16 md:h-16 object-cover rounded"
                         loading="lazy"
@@ -2203,6 +2280,203 @@ function ProductManagementSection() {
                 Cerrar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para agregar producto manualmente */}
+      {showAddProductModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-primary-black">
+                Agregar Nuevo Producto
+              </h3>
+              <button
+                onClick={() => setShowAddProductModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <XCircleIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                handleAddProduct()
+              }}
+              className="p-6 space-y-4"
+            >
+              {/* ID */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  ID <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newProduct.id}
+                  onChange={(e) => setNewProduct({ ...newProduct, id: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                  required
+                  placeholder="Ej: 23"
+                />
+              </div>
+
+              {/* Nombre */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nombre del Producto <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newProduct.name}
+                  onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                  required
+                  placeholder="Ej: Smart TV 55 pulgadas"
+                />
+              </div>
+
+              {/* Marca */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Marca
+                </label>
+                <input
+                  type="text"
+                  value={newProduct.brand}
+                  onChange={(e) => setNewProduct({ ...newProduct, brand: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                  placeholder="Ej: Samsung"
+                  list="brands-list"
+                />
+                <datalist id="brands-list">
+                  {brands.map((brand) => (
+                    <option key={brand} value={brand} />
+                  ))}
+                </datalist>
+              </div>
+
+              {/* Precio */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Precio <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newProduct.price}
+                    onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                    required
+                    placeholder="Ej: 899.99"
+                  />
+                </div>
+
+                {/* Precio Anterior */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Precio Anterior (Oferta)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newProduct.previousPrice}
+                    onChange={(e) => setNewProduct({ ...newProduct, previousPrice: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                    placeholder="Ej: 1099.99"
+                  />
+                </div>
+              </div>
+
+              {/* Categoría */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Categoría <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newProduct.category}
+                  onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                  required
+                  placeholder="Ej: televisores"
+                  list="categories-list"
+                />
+                <datalist id="categories-list">
+                  {categories.map((category) => (
+                    <option key={category} value={category} />
+                  ))}
+                </datalist>
+                <p className="text-xs text-gray-500 mt-1">
+                  Se convertirá automáticamente a formato slug (ej: "aires acondicionados" → "aires-acondicionados")
+                </p>
+              </div>
+
+              {/* Descripción */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Descripción
+                </label>
+                <textarea
+                  value={newProduct.description}
+                  onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                  rows="3"
+                  placeholder="Descripción detallada del producto..."
+                />
+              </div>
+
+              {/* Imagen */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  URL de Imagen
+                </label>
+                <input
+                  type="text"
+                  value={newProduct.image}
+                  onChange={(e) => setNewProduct({ ...newProduct, image: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                  placeholder="URL de la imagen o base64 (data:image/...)"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Puedes ingresar una URL de imagen o un string base64. También puedes subir la imagen después desde la tabla de productos.
+                </p>
+                {newProduct.image && (
+                  <div className="mt-2">
+                    <p className="text-sm font-medium text-gray-700 mb-2">Vista Previa:</p>
+                    <img
+                      src={newProduct.image}
+                      alt="Preview"
+                      className="w-full h-48 object-contain border border-gray-300 rounded"
+                      onError={(e) => {
+                        e.target.src = getPlaceholderImage(200, 200, 'Imagen no válida')
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Botones */}
+              <div className="flex gap-4 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowAddProductModal(false)}
+                  className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-6 py-3 bg-primary-red text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
+                >
+                  Guardar Producto
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

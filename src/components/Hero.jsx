@@ -4,6 +4,7 @@ import { ArrowRightIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/re
 import { useProducts } from '../hooks/useProducts'
 import logoGia from '../../logo-gia.png'
 import { getPlaceholderImage } from '../utils/imageHelper'
+import { getProductImageUrl } from '../utils/imageStorage'
 
 // Constantes de configuración del carrusel
 const CAROUSEL_CONFIG = {
@@ -92,7 +93,7 @@ function Hero() {
       {/* Imagen */}
       <div className="relative w-full h-[140px] sm:h-[160px] md:h-[180px] lg:h-[200px] bg-white flex items-center justify-center">
         <img
-          src={product.image}
+          src={getProductImageUrl(product.image) || getPlaceholderImage(400, 300, product.name)}
           alt={product.name}
           className="w-full h-full object-contain p-2 sm:p-3"
           loading="lazy"

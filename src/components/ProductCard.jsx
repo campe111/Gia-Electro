@@ -5,15 +5,26 @@ import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid'
 import { useCart } from '../context/CartContext'
 import { useUser } from '../context/UserContext'
 import { getPlaceholderImage } from '../utils/imageHelper'
+import { getProductImageUrl } from '../utils/imageStorage'
 import toast from 'react-hot-toast'
 
 function ProductCard({ product, enableContainer = false }) {
   const { id, name, price, image, category, description } = product
   
-  // Si la imagen ya es una ruta local (empieza con /images/), usarla directamente
-  // Si es una URL externa, usarla como fallback
-  const [imageSrc, setImageSrc] = useState(image || getPlaceholderImage(300, 200, 'Imagen no disponible'))
+  // Obtener URL de imagen (maneja Supabase Storage, base64, y rutas locales)
+  const imageUrl = getProductImageUrl(image)
+  const [imageSrc, setImageSrc] = useState(imageUrl || getPlaceholderImage(300, 200, 'Imagen no disponible'))
   const [isFavorite, setIsFavorite] = useState(false)
+  
+  // Actualizar imagen cuando cambie el producto
+  useEffect(() => {
+    const newImageUrl = getProductImageUrl(image)
+    if (newImageUrl) {
+      setImageSrc(newImageUrl)
+    } else {
+      setImageSrc(getPlaceholderImage(300, 200, 'Imagen no disponible'))
+    }
+  }, [image])
   
   const previousPrice =
     (product.previousPrice ?? product.originalPrice) &&

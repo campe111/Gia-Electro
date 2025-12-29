@@ -1,4 +1,4 @@
-// Productos de Gia Electro con imágenes locales
+// Productos de Gia Electro
 
 export const products = [
   // Aire Acondicionado
@@ -9,7 +9,6 @@ export const products = [
     price: 899.99,
     category: 'aires-acondicionados',
     description: 'Split frío/calor 5200W, ideal para ambientes medianos',
-    image: '/images/products/Gia Electro/Aire Acondicionado BGH Split Frio_Calor 5200W BSH5_2.jpg',
   },
   {
     id: 2,
@@ -18,7 +17,6 @@ export const products = [
     price: 649.99,
     category: 'aires-acondicionados',
     description: 'Aire acondicionado portátil 3500W con función frío/calor',
-    image: '/images/products/Gia Electro/Aire acondicionado Portátil Philco 3500W Frio_Calo_12.jpg',
   },
 
   // Aspiradoras
@@ -29,7 +27,6 @@ export const products = [
     price: 499.99,
     category: 'aspiradoras',
     description: 'Aspiradora robot inteligente con mapeo y control remoto',
-    image: '/images/products/Gia Electro/Aspiradora Robot CONGA 2499 -_1.jpg',
   },
   {
     id: 4,
@@ -38,7 +35,6 @@ export const products = [
     price: 399.99,
     category: 'aspiradoras',
     description: 'Aspiradora robot extra delgada con función de barrer y trapear',
-    image: '/images/products/Gia Electro/Aspiradora Robot Smartlife Barre Trapea Extra Slim_10.jpg',
   },
 
   // Cafeteras
@@ -49,7 +45,6 @@ export const products = [
     price: 199.99,
     category: 'cafeteras',
     description: 'Cafetera eléctrica con capacidad para 12 tazas',
-    image: '/images/products/Gia Electro/Cafetera Eléctrica Liliana AC930 Negro_2.jpg',
   },
   {
     id: 6,
@@ -58,7 +53,6 @@ export const products = [
     price: 349.99,
     category: 'cafeteras',
     description: 'Cafetera espresso 2 en 1 con presión de 20 bar, incluye espumador de leche',
-    image: '/images/products/Gia Electro/Cafetera Espresso 2 en 1 con 20 Bar SL-EC8501_1.jpg',
   },
 
   // Calefactores
@@ -69,7 +63,6 @@ export const products = [
     price: 299.99,
     category: 'calefactores',
     description: 'Calefactor a gas de 4000 calorías con encendido eléctrico',
-    image: '/images/products/Gia Electro/Calefactor Coppens 4000 Tb S Izquierda Peltre Acer_3.jpg',
   },
 
   // Cocinas
@@ -80,7 +73,6 @@ export const products = [
     price: 899.99,
     category: 'cocinas',
     description: 'Cocina a gas de 56cm con horno y 4 hornallas',
-    image: '/images/products/Gia Electro/Cocina Longvie a gas de 56cm 12231B_2.webp',
   },
 
   // Refrigeradores
@@ -91,7 +83,6 @@ export const products = [
     price: 749.99,
     category: 'refrigeradores',
     description: 'Heladera con freezer de 280 litros, eficiencia energética A+',
-    image: '/images/products/Gia Electro/Heladera Drean HDR280F50B_1.webp',
   },
 
   // Hornos
@@ -102,7 +93,6 @@ export const products = [
     price: 449.99,
     category: 'hornos',
     description: 'Horno eléctrico de 46 litros con función de convección',
-    image: '/images/products/Gia Electro/Horno eléctrico KF-H46CL 46 Lt. Negro_1.jpg',
   },
 
   // Lavarropas
@@ -113,7 +103,6 @@ export const products = [
     price: 599.99,
     category: 'lavadoras',
     description: 'Lavarropas carga frontal de 6 kg con múltiples programas',
-    image: '/images/products/Gia Electro/Lavarropas Carga Frontal 6 Kg Blanco Drean – NEXT _1.webp',
   },
   {
     id: 12,
@@ -122,7 +111,6 @@ export const products = [
     price: 799.99,
     category: 'lavadoras',
     description: 'Lavarropas inteligente de 8 kg con conexión WiFi y control desde app',
-    image: '/images/products/Gia Electro/Lavarropas Drean Next 8.14 8KG WBG wi-fi_1.webp',
   },
   {
     id: 13,
@@ -131,7 +119,6 @@ export const products = [
     price: 699.99,
     category: 'lavadoras',
     description: 'Lavarropas carga frontal de 7 kg con tecnología EcoBubble',
-    image: '/images/products/Gia Electro/Lavarropas Samsung  WW70M0NHWU – 7 Kg_1.webp',
   },
   {
     id: 14,
@@ -140,7 +127,6 @@ export const products = [
     price: 449.99,
     category: 'lavadoras',
     description: 'Lavarropas semiautomático de 7 kg, ideal para espacios reducidos',
-    image: '/images/products/Gia Electro/Lavarropas Semiautomatico Columbia LSC7001 7 kg Ca_1.jpg',
   },
 
   // Televisores
@@ -151,7 +137,6 @@ export const products = [
     price: 399.99,
     category: 'televisores',
     description: 'Smart TV 32 pulgadas HD con Android TV integrado',
-    image: '/images/products/Gia Electro/Smart TV 32" HD Noblex Android DV32X7080_2.jpg',
   },
   {
     id: 16,
@@ -160,7 +145,6 @@ export const products = [
     price: 449.99,
     category: 'televisores',
     description: 'Smart TV Samsung 32 pulgadas HD con Tizen OS',
-    image: '/images/products/Gia Electro/Smart TV 32" HD Samsung UN32T4300A_2.jpg',
   },
   {
     id: 17,
@@ -169,7 +153,6 @@ export const products = [
     price: 699.99,
     category: 'televisores',
     description: 'Smart TV Samsung 43 pulgadas Full HD con HDR',
-    image: '/images/products/Gia Electro/Smart TV 43 FHD Samsung UN43T5300SGCZB_3.jpg',
   },
   {
     id: 18,
@@ -178,7 +161,6 @@ export const products = [
     price: 649.99,
     category: 'televisores',
     description: 'Smart TV Philips 43 pulgadas Full HD con Android TV',
-    image: '/images/products/Gia Electro/Smart TV 43\' FHD TITAN Philips 43PFD6910_77_2.jpg',
   },
   {
     id: 19,
@@ -187,7 +169,6 @@ export const products = [
     price: 899.99,
     category: 'televisores',
     description: 'Smart TV Philips 50 pulgadas 4K UHD con HDR y Android TV',
-    image: '/images/products/Gia Electro/Smart TV 50\' UHD 4KPhilips Titan 50PUD7309_77_2.jpg',
   },
 
   // Ventiladores
@@ -198,7 +179,6 @@ export const products = [
     price: 79.99,
     category: 'ventiladores',
     description: 'Ventilador de pie de 20 pulgadas con 3 velocidades y oscilación',
-    image: '/images/products/Gia Electro/Ventilador de pie 20 90 W SHVP20M_1.jpg',
   },
   {
     id: 21,
@@ -207,7 +187,6 @@ export const products = [
     price: 89.99,
     category: 'ventiladores',
     description: 'Ventilador de pie de 20 pulgadas con control remoto y temporizador',
-    image: '/images/products/Gia Electro/Ventilador de pie 20 90 W VPM2016_1.jpg',
   },
 
   // Batidoras
@@ -218,6 +197,5 @@ export const products = [
     price: 149.99,
     category: 'batidoras',
     description: 'Batidora planetaria de 650W con bowl de acero inoxidable',
-    image: '/images/products/Gia Electro/Batidora Planetaria Daewoo KA2216G Roja 650W_3.jpg',
   },
 ]
