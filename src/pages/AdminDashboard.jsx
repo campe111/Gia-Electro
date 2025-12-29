@@ -1727,15 +1727,15 @@ function ProductManagementSection() {
             console.log(`🔍 Validando fila ${index + 2}:`, row)
             console.log(`🔍 Campos disponibles en fila ${index + 2}:`, Object.keys(row))
             
-            const hasName = row.Nombre || row.name || row.Producto || row.Nombre_Producto
-            console.log(`🔍 ¿Tiene nombre? ${hasName ? 'Sí' : 'No'}`, { Nombre: row.Nombre, name: row.name, Producto: row.Producto, Nombre_Producto: row.Nombre_Producto })
+            const hasName = row.Nombre || row.name || row.nombre || row.Producto || row.Nombre_Producto
+            console.log(`🔍 ¿Tiene nombre? ${hasName ? 'Sí' : 'No'}`, { Nombre: row.Nombre, name: row.name, nombre: row.nombre, Producto: row.Producto, Nombre_Producto: row.Nombre_Producto })
             
             if (!hasName) {
               validationErrors.push(`Fila ${index + 2}: Falta el nombre del producto`)
             }
             
-            const price = parseFloat(row.Precio || row.price || row.PRECIO || 0)
-            console.log(`🔍 Precio en fila ${index + 2}:`, { Precio: row.Precio, price: row.price, PRECIO: row.PRECIO, parsed: price })
+            const price = parseFloat(row.Precio || row.price || row.precio || row.PRECIO || 0)
+            console.log(`🔍 Precio en fila ${index + 2}:`, { Precio: row.Precio, price: row.price, precio: row.precio, PRECIO: row.PRECIO, parsed: price })
             
             if (!price || price <= 0) {
               validationErrors.push(`Fila ${index + 2}: Precio inválido`)
@@ -1796,13 +1796,13 @@ function ProductManagementSection() {
           const processedProducts = jsonData.map((row, index) => {
             // Mapear columnas del Excel a la estructura del producto
             const productId = row.ID || row.id || row.Id || (index + 1)
-            const productName = row.Nombre || row.name || row.Producto || row.Nombre_Producto || ''
-            const productPrice = parseFloat(row.Precio || row.price || row.PRECIO || 0)
-            const productCategory = row.Categoria || row.category || row.CATEGORIA || 'otros'
-            const productBrand = row.Marca || row.brand || row.MARCA || ''
-            const productDescription = row.Descripcion || row.description || row.DESCRIPCION || ''
-            const productImage = row.Imagen || row.image || row.IMAGEN || row.Imagen_URL || ''
-            const previousPrice = row['Precio Anterior'] || row.previousPrice || row.PRECIO_ANTERIOR ? parseFloat(row['Precio Anterior'] || row.previousPrice || row.PRECIO_ANTERIOR) : null
+            const productName = row.Nombre || row.name || row.nombre || row.Producto || row.Nombre_Producto || ''
+            const productPrice = parseFloat(row.Precio || row.price || row.precio || row.PRECIO || 0)
+            const productCategory = row.Categoria || row.category || row.categoria || row.CATEGORIA || 'otros'
+            const productBrand = row.Marca || row.brand || row.marca || row.MARCA || ''
+            const productDescription = row.Descripcion || row.description || row.descripcion || row.DESCRIPCION || ''
+            const productImage = row.Imagen || row.image || row.imagen || row.IMAGEN || row.Imagen_URL || ''
+            const previousPrice = row['Precio Anterior'] || row['precio anterior'] || row.previousPrice || row.PRECIO_ANTERIOR ? parseFloat(row['Precio Anterior'] || row['precio anterior'] || row.previousPrice || row.PRECIO_ANTERIOR) : null
 
             const product = {
               id: productId,
