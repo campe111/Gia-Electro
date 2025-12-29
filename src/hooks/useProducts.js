@@ -94,21 +94,49 @@ export const useProducts = () => {
       .then((module) => {
         supabaseInstanceRef.current = module.supabase || module.default
         if (supabaseInstanceRef.current && typeof supabaseInstanceRef.current.channel === 'function') {
-          productsChannelRef.current = supabaseInstanceRef.current
-            .channel('products-changes')
-            .on('postgres_changes', 
-              { event: '*', schema: 'public', table: 'products' },
-              (payload) => {
-                console.log('🔄 Cambio detectado en Supabase products:', payload.eventType)
-                // Recargar productos cuando hay cambios
-                loadProducts()
-              }
-            )
-            .subscribe()
+          // Esperar un momento antes de suscribirse para asegurar que Supabase esté listo
+          setTimeout(() => {
+            try {
+              productsChannelRef.current = supabaseInstanceRef.current
+                .channel('products-changes', {
+                  config: {
+                    broadcast: { self: true },
+                    presence: { key: '' }
+                  }
+                })
+                .on('postgres_changes', 
+                  { 
+                    event: '*', 
+                    schema: 'public', 
+                    table: 'products' 
+                  },
+                  (payload) => {
+                    console.log('🔄 Cambio detectado en Supabase products:', payload.eventType)
+                    // Recargar productos cuando hay cambios
+                    loadProducts()
+                  }
+                )
+                .subscribe((status, err) => {
+                  if (status === 'SUBSCRIBED') {
+                    console.log('✅ Suscrito a cambios de productos en Supabase Realtime')
+                  } else if (status === 'CHANNEL_ERROR') {
+                    console.warn('⚠️ Error al suscribirse a Realtime:', err)
+                    // No es crítico, la app seguirá funcionando sin Realtime
+                  } else if (status === 'TIMED_OUT') {
+                    console.warn('⚠️ Timeout al suscribirse a Realtime')
+                  } else if (status === 'CLOSED') {
+                    console.warn('⚠️ Canal de Realtime cerrado')
+                  }
+                })
+            } catch (error) {
+              console.warn('Error al crear suscripción de Realtime:', error)
+              // No es crítico, la aplicación seguirá funcionando sin Realtime
+            }
+          }, 1000) // Esperar 1 segundo antes de suscribirse
         }
       })
       .catch((error) => {
-        console.warn('No se pudo cargar Supabase para Realtime (puede ser que las variables de entorno no estén configuradas):', error.message)
+        console.warn('No se pudo cargar Supabase para Realtime:', error.message)
       })
 
     window.addEventListener('storage', handleStorageChange)
