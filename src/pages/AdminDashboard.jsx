@@ -1617,14 +1617,23 @@ function ProductManagementSection() {
   }
 
   const handleExcelUpload = async (e) => {
+    console.log('🟢 handleExcelUpload llamado')
+    console.log('🟢 Event:', e)
+    console.log('🟢 Target:', e.target)
+    console.log('🟢 Files:', e.target.files)
+    
     const file = e.target.files[0]
     
-    // Agregar logging para debug
+    // Agregar logging directo a consola (no solo logger)
+    console.log('📄 Archivo seleccionado:', file?.name)
+    console.log('📄 Tipo MIME:', file?.type)
+    console.log('📄 Tamaño:', file?.size, 'bytes')
     logger.log('Archivo seleccionado:', file?.name)
     logger.log('Tipo MIME:', file?.type)
     logger.log('Tamaño:', file?.size, 'bytes')
     
     if (!file) {
+      console.warn('⚠️ No se seleccionó ningún archivo')
       logger.warn('No se seleccionó ningún archivo')
       return
     }
@@ -2016,8 +2025,15 @@ function ProductManagementSection() {
             <button
               type="button"
               onClick={() => {
+                console.log('🔵 Botón Subir Excel clickeado')
+                console.log('🔵 Ref del input:', excelFileInputRef.current)
                 logger.log('Botón Subir Excel clickeado')
-                excelFileInputRef.current?.click()
+                if (excelFileInputRef.current) {
+                  excelFileInputRef.current.click()
+                  console.log('🔵 Click en input ejecutado')
+                } else {
+                  console.error('❌ El ref del input no está disponible')
+                }
               }}
               disabled={isLoading}
               className="px-4 py-2 bg-primary-yellow text-primary-black rounded-lg hover:bg-yellow-500 transition-colors font-semibold cursor-pointer flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
