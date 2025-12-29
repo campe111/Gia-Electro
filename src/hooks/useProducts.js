@@ -1,7 +1,6 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { products as defaultProducts } from '../data/products'
 import { loadProductsFromSupabase } from '../utils/productStorage'
-import { supabase } from '../config/supabase'
 
 // Cache en memoria para evitar re-parsear constantemente
 let productsCache = null
@@ -86,22 +85,30 @@ export const useProducts = () => {
     }
     
     // Escuchar cambios en Supabase usando Realtime
-    let productsChannel = null
-    try {
-      productsChannel = supabase
-        .channel('products-changes')
-        .on('postgres_changes', 
-          { event: '*', schema: 'public', table: 'products' },
-          (payload) => {
-            console.log('🔄 Cambio detectado en Supabase products:', payload.eventType)
-            // Recargar productos cuando hay cambios
-            loadProducts()
-          }
-        )
-        .subscribe()
-    } catch (error) {
-      console.warn('Error suscribiéndose a cambios de Supabase:', error)
-    }
+    const productsChannelRef = useRef(null)
+    const supabaseInstanceRef = useRef(null)
+    
+    // Cargar supabase de forma dinámica para evitar errores si no está configurado
+    import('../config/supabase')
+      .then((module) => {
+        supabaseInstanceRef.current = module.supabase || module.default
+        if (supabaseInstanceRef.current && typeof supabaseInstanceRef.current.channel === 'function') {
+          productsChannelRef.current = supabaseInstanceRef.current
+            .channel('products-changes')
+            .on('postgres_changes', 
+              { event: '*', schema: 'public', table: 'products' },
+              (payload) => {
+                console.log('🔄 Cambio detectado en Supabase products:', payload.eventType)
+                // Recargar productos cuando hay cambios
+                loadProducts()
+              }
+            )
+            .subscribe()
+        }
+      })
+      .catch((error) => {
+        console.warn('No se pudo cargar Supabase para Realtime (puede ser que las variables de entorno no estén configuradas):', error.message)
+      })
 
     window.addEventListener('storage', handleStorageChange)
     window.addEventListener('productsUpdated', handleProductsUpdate)
@@ -132,8 +139,12 @@ export const useProducts = () => {
       window.removeEventListener('productsUpdated', handleProductsUpdate)
       clearInterval(interval)
       // Desuscribirse del canal de Supabase
-      if (productsChannel) {
-        supabase.removeChannel(productsChannel)
+      if (productsChannelRef.current && supabaseInstanceRef.current && typeof supabaseInstanceRef.current.removeChannel === 'function') {
+        try {
+          supabaseInstanceRef.current.removeChannel(productsChannelRef.current)
+        } catch (error) {
+          console.warn('Error al desuscribirse del canal de Supabase:', error)
+        }
       }
     }
   }, [])
