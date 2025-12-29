@@ -1,10 +1,8 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAdmin } from '../context/AdminContext'
 import { LockClosedIcon } from '@heroicons/react/24/outline'
 
 function AdminLogin() {
-  const navigate = useNavigate()
   const { login } = useAdmin()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -22,9 +20,11 @@ function AdminLogin() {
       const result = await login(email, password)
 
       if (result.success) {
-        // Pequeño delay para asegurar que el estado se actualice
-        await new Promise((resolve) => setTimeout(resolve, 100))
-        navigate('/admin/dashboard')
+        // En móviles, usar window.location.href es más confiable
+        // porque fuerza un reload completo y asegura que el estado se actualice
+        setTimeout(() => {
+          window.location.href = '/admin/dashboard'
+        }, 300)
       } else {
         setError(result.error || 'Error al iniciar sesión')
         setIsLoading(false)
